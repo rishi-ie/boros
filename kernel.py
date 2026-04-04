@@ -23,7 +23,7 @@ class BorosKernel:
     def __init__(self):
         self.boros_root = Path(__file__).parent
         self.registry = {}
-        
+
         # Load config and manifest
         self._load_config()
         self._load_manifest()
@@ -35,13 +35,13 @@ class BorosKernel:
         try:
             self.evolution_llm = load_adapter(self.config["providers"]["evolution_api"])
             self.meta_eval_llm = load_adapter(self.config["providers"]["meta_eval_api"])
-            
+
             # Force early initialization to ensure keys are valid
             if hasattr(self.evolution_llm, "client"):
                 _ = self.evolution_llm.client
             if hasattr(self.meta_eval_llm, "client"):
                 _ = self.meta_eval_llm.client
-                
+
             print(f"Adapters loaded: evolution={self.config['providers']['evolution_api']['provider']}, meta_eval={self.config['providers']['meta_eval_api']['provider']}")
         except Exception as e:
             print(f"FATAL: Missing API Keys or Adapter Error: {e}")
@@ -52,11 +52,11 @@ class BorosKernel:
         boros_dir = self.boros_root
         session_dir = boros_dir / "session"
         cycle_file = session_dir / "current_cycle.json"
-        
+
         if not cycle_file.exists():
             print("First boot detected. Initializing seed state...")
             session_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Create directories
             dirs = [
                 "tasks/queue", "tasks/active", "tasks/completed", "tasks/learning",
@@ -66,7 +66,7 @@ class BorosKernel:
             ]
             for d in dirs:
                 (boros_dir / d).mkdir(parents=True, exist_ok=True)
-                
+
             # Derive evals/categories.json from world_model.json
             categories = {}
             wm_path = boros_dir / "world_model.json"
@@ -81,10 +81,10 @@ class BorosKernel:
                         }
                 except Exception as e:
                     print(f"Error loading world_model.json: {e}")
-            
+
             with open(boros_dir / "evals" / "categories.json", "w") as f:
                 json.dump(categories, f, indent=2)
-                
+
             # Initialize high_water_marks.json
             high_water = {cat: 0.0 for cat in categories.keys()}
             hw_dir = boros_dir / "skills" / "eval-bridge" / "state"
@@ -93,9 +93,7 @@ class BorosKernel:
                 json.dump(high_water, f, indent=2)
 
             # Initialize loop_state.json
-            loop_state_dir = boros_dir / "skills" / "loop-orchestrator" / "state"
-            loop_state_dir.mkdir(parents=True, exist_ok=True)
-            with open(loop_state_dir / "loop_state.json", "w") as f:
+            with open(session_dir / "loop_state.json", "w") as f:
                 json.dump({
                     "cycle": 0,
                     "stage": None,
@@ -107,7 +105,7 @@ class BorosKernel:
             # Create pending commands
             with open(boros_dir / "commands" / "pending.json", "w") as f:
                 json.dump({"pending": []}, f)
-                
+
             # Finish initialization mark
             with open(cycle_file, "w") as f:
                 json.dump({"cycle": 0}, f)
@@ -225,26 +223,26 @@ class BorosKernel:
         s_info = self.manifest["skills"].get(skill_name)
         if not s_info:
             return False
-            
+
         module_path = f"boros.skills.{skill_name}.functions"
-        
+
         # 1. Reload specific function submodules to ensure fresh code
         for func_name in s_info.get("provided_functions", []):
             sub_path = f"{module_path}.{func_name}"
             if sub_path in sys.modules:
                 importlib.reload(sys.modules[sub_path])
-        
+
         # 2. Reload the main __init__ module to capture re-exported function pointers
         if module_path in sys.modules:
             module = importlib.reload(sys.modules[module_path])
         else:
             module = importlib.import_module(module_path)
-            
+
         # 3. Re-bind fresh functions to registry
         for func_name in s_info.get("provided_functions", []):
             if hasattr(module, func_name):
                 self.registry[func_name] = getattr(module, func_name)
-                
+
         return True
 
 if __name__ == "__main__":

@@ -215,16 +215,45 @@ class DirectorInterface:
         else:
             print_formatted_text(HTML("<ansiyellow>⚠ Meta-Eval LLM not loaded (API key missing)</ansiyellow>"))
 
-        print_formatted_text(HTML(""))
+        # Director CLI
+        session = PromptSession()
 
-        # Start evolution loop in background
+        # Boot mode selection
+        print_formatted_text(HTML("\n<b><ansiblue>Select Boot Mode:</ansiblue></b>"))
+        print_formatted_text(HTML(" 1. <ansimagenta>Evolution Mode</ansimagenta> (Autonomous self-improvement)"))
+        print_formatted_text(HTML(" 2. <ansicyan>Digital Employee Mode</ansicyan> (Execution on demand)"))
+
+        selected_mode = "evolution"
+        while True:
+            try:
+                choice = session.prompt("Select [1/2]: ").strip()
+                if choice == "1":
+                    selected_mode = "evolution"
+                    print_formatted_text(HTML("<b><ansimagenta>Starting in Evolution Mode...</ansimagenta></b>\n"))
+                    break
+                elif choice == "2":
+                    selected_mode = "employee"
+                    print_formatted_text(HTML("<b><ansicyan>Starting in Digital Employee Mode...</ansicyan></b>\n"))
+                    break
+                else:
+                    print_formatted_text(HTML("<ansiyellow>Invalid choice. Please enter 1 or 2.</ansiyellow>"))
+            except (KeyboardInterrupt, EOFError):
+                return
+
+        state_file = self.boros_root / "session" / "loop_state.json"
+        if state_file.exists():
+            try:
+                state = json.loads(state_file.read_text())
+                state["mode"] = selected_mode
+                state_file.write_text(json.dumps(state, indent=2))
+            except Exception: pass
+
+        # Start agent loop in background
         kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
         kernel_thread.start()
 
-        # Director CLI
-        session = PromptSession()
         print_formatted_text(HTML("<b><ansiblue>Boros Director Interface</ansiblue></b>"))
-        print_formatted_text(HTML("Commands: 'boros status', 'boros pause', 'boros resume', or Ctrl+C to stop."))
+        print_formatted_text(HTML("Commands: 'boros status', 'boros pause', 'boros resume', 'boros evolution', 'boros employee', or Ctrl+C to stop."))
 
         while True:
             try:
@@ -266,6 +295,18 @@ class DirectorInterface:
                 kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
                 kernel_thread.start()
                 print_formatted_text(HTML("<ansigreen>Resumed evolution loop.</ansigreen>"))
+        elif cmd == "evolution" or cmd == "employee":
+            state_file = self.boros_root / "session" / "loop_state.json"
+            if state_file.exists():
+                state = json.loads(state_file.read_text())
+                state["mode"] = cmd
+                state_file.write_text(json.dumps(state, indent=2))
+                if cmd == "evolution":
+                    print_formatted_text(HTML("<b><ansimagenta>🔄 Switching to Evolution Mode</ansimagenta></b>"))
+                else:
+                    print_formatted_text(HTML("<b><ansicyan>🧑‍💻 Switching to Digital Employee Mode</ansicyan></b>"))
+            else:
+                print_formatted_text(HTML("<ansiyellow>Loop state file missing; cannot change mode yet.</ansiyellow>"))
         else:
             with open(self.pending_file, "r") as f:
                 data = json.load(f)

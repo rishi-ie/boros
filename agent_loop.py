@@ -34,7 +34,7 @@ class AgentLoop:
             parts.append(boros_md.read_text(encoding="utf-8"))
 
         # 2. Current loop state
-        state_file = self.boros_root / "skills" / "loop-orchestrator" / "state" / "loop_state.json"
+        state_file = self.boros_root / "session" / "loop_state.json"
         if state_file.exists():
             try:
                 state = json.loads(state_file.read_text())
@@ -206,28 +206,28 @@ class AgentLoop:
                     self.log(traceback.format_exc())
                     status = "error"
                     raise  # Let the continuous loop catch this and trigger the cooldown sleep
-    
+
                 content = response.get("content", [])
                 stop_reason = response.get("stop_reason", "end_turn")
                 usage = response.get("usage", {})
-    
+
                 # Log text output
                 for block in content:
                     if block.get("type") == "text" and block.get("text"):
                         self.log(f"[BOROS] {block['text'][:800]}")
-    
+
                 # Log usage
                 if usage:
                     self.log(f"[TOKENS] in={usage.get('input_tokens', '?')} out={usage.get('output_tokens', '?')}")
-    
+
                 # Append assistant response
                 messages.append({"role": "assistant", "content": content})
-    
+
                 # Natural stop
                 if stop_reason == "end_turn":
                     self.log("[CYCLE] LLM ended turn naturally.")
                     break
-    
+
                 # Dispatch tool calls
                 tool_results = []
                 for block in content:
@@ -235,7 +235,7 @@ class AgentLoop:
                         name = block["name"]
                         inp = block.get("input", {})
                         tid = block["id"]
-    
+
                         if name == "evolve_propose":
                             desc = inp.get("description", "")
                             self.log(f"\n========================================")
@@ -255,22 +255,22 @@ class AgentLoop:
                             self.log(f"[TOOL] → {name}(...)")
                         else:
                             self.log(f"[TOOL] → {name}({json.dumps(inp, default=str)[:300]})")
-    
+
                         result = self.dispatch_tool(name, inp)
                         result_str = json.dumps(result, default=str)
-                        
+
                         if name in ("evolve_propose", "tool_file_edit_diff"):
                             self.log(f"[TOOL] ← {result_str}") # print full result for these
                         else:
                             self.log(f"[TOOL] ← {result_str[:400]}")
-    
+
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": tid,
                             "content": result_str
                         })
                         tool_call_count += 1
-    
+
                 if not tool_results:
                     empty_turns += 1
                     if empty_turns >= 3:
@@ -285,9 +285,9 @@ class AgentLoop:
                         continue
                 else:
                     empty_turns = 0
-    
+
                 messages.append({"role": "user", "content": tool_results})
-    
+
         finally:
             # Log cycle end to file
             log_file = self.boros_root / "logs" / "cycles.log"
@@ -299,11 +299,11 @@ class AgentLoop:
         self.log(f"[CYCLE] Finished. {tool_call_count} tool calls.")
         return tool_call_count
 
-    def run_execution_cycle(self):
+    def run_execution_cycle(self, active_task=None):
         """Run one full execution cycle (acting as a digital employee)."""
         system = self.build_system_prompt()
         tools = self.build_tools()
-        messages = [{"role": "user", "content": self._execution_prompt()}]
+        messages = [{"role": "user", "content": self._execution_prompt(active_task)}]
         tool_call_count = 0
         cycle_start = time.time()
         self.log("[CYCLE] Starting execution cycle...")
@@ -375,7 +375,7 @@ class AgentLoop:
             log_file.parent.mkdir(parents=True, exist_ok=True)
             with open(log_file, "a") as f:
                 f.write(f"Execution cycle ended. status={status} tool_calls={tool_call_count}\n")
-        
+
         self.log(f"[CYCLE] Execution Finished. {tool_call_count} tool calls.")
         return tool_call_count
 
@@ -394,7 +394,7 @@ class AgentLoop:
                 break
 
             cycle_num += 1
-            
+
             mode = "evolution"
             state_file = self.boros_root / "session" / "loop_state.json"
             if state_file.exists():
@@ -403,17 +403,39 @@ class AgentLoop:
                 except:
                     pass
 
-            self.log(f"\n{'='*60}")
-            self.log(f"  {mode.upper()} CYCLE {cycle_num}")
-            self.log(f"{'='*60}\n")
-
             try:
                 if mode == "evolution":
+                    self.log(f"\n{'='*60}")
+                    self.log(f"  {mode.upper()} CYCLE {cycle_num}")
+                    self.log(f"{'='*60}\n")
                     tc = self.run_evolution_cycle()
                 else:
-                    tc = self.run_execution_cycle()
-                    time.sleep(2) # Prevent spin-locking when bored in execution mode
-                
+                    pending_file = self.boros_root / "commands" / "pending.json"
+                    has_tasks = False
+                    task_text = None
+                    if pending_file.exists():
+                        try:
+                            data = json.loads(pending_file.read_text())
+                            if data.get("pending"):
+                                has_tasks = True
+                                task_text = data["pending"].pop(0)
+                                pending_file.write_text(json.dumps(data, indent=2))
+                        except Exception: pass
+
+                    if not has_tasks:
+                        if not getattr(self, "_was_idling", False):
+                            self.log("[BOROS] Idling in Employee Mode, waiting for tasks...")
+                            self._was_idling = True
+                        time.sleep(2)
+                        continue
+
+                    self._was_idling = False
+                    self.log(f"\n{'='*60}")
+                    self.log(f"  {mode.upper()} CYCLE {cycle_num}")
+                    self.log(f"{'='*60}\n")
+                    tc = self.run_execution_cycle(active_task=task_text)
+                    time.sleep(1) # Prevent spin-locking if tasks finish very fast
+
                 if on_cycle_complete:
                     on_cycle_complete(cycle_num, tc)
                 fail_count = 0  # Reset backoff on success
@@ -431,14 +453,14 @@ class AgentLoop:
     # Cycle Prompts
     # ────────────────────────────────────────────
 
-    def _execution_prompt(self):
+    def _execution_prompt(self, active_task=None):
+        task_str = active_task if active_task else "Check for any active objectives and execute them."
         return (
             "You are Boros in EXECUTION MODE.\n"
             "You are an unconstrained, super reliable digital employee.\n"
-            "Your objective: Check for pending user tasks (typically in commands/pending.json) or any active objectives, "
-            "and execute them flawlessly using your tools.\n"
-            "Do NOT attempt to evolve the codebase or meta-evaluate in this mode. "
-            "Just perform the tasks you have been given."
+            f"Your immediate priority is to complete this specific task for the user:\n\n{task_str}\n\n"
+            "Use your tools to solve it, and naturally end your turn when finished.\n"
+            "Do NOT attempt to evolve the codebase or meta-evaluate in this mode."
         )
 
     def _cycle_prompt(self):
