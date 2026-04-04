@@ -103,3 +103,5 @@ The core philosophy of Boros is that **intelligence belongs in pure, declarative
 - **Associative Memory Engine**: Boros uses a localized SQLite + Vector database hierarchy to instantly page context in and out dynamically, enabling compounded semantic memory.
 
 By isolating intelligence into purely evolvable skills—and minimizing brittle Python algorithms—Boros maintains rapid, resilient self-correction over thousands of cycles. Infinite intelligence is compounded through infinite execution.
+
+FOLLOW x.com/rishi-sidharda
