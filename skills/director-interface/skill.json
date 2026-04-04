@@ -1,0 +1,14 @@
+{
+  "name": "director-interface",
+  "type": "pre-boot",
+  "description": "To be written.",
+  "dependencies": [],
+  "provided_functions": [],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": null
+}

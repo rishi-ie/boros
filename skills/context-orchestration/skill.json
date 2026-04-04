@@ -1,0 +1,21 @@
+{
+  "name": "context-orchestration",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller",
+    "identity",
+    "memory"
+  ],
+  "provided_functions": [
+    "context_load",
+    "context_get_manifest"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "context_load"
+}

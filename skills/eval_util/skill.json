@@ -1,0 +1,7 @@
+{
+  "name": "eval_util",
+  "version": "0.1.0",
+  "provided_functions": [
+    "generate_evaluation_artifact"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "skill-forge",
+  "type": "demand",
+  "description": "To be written.",
+  "dependencies": [],
+  "provided_functions": [
+    "forge_invoke",
+    "forge_test_suite",
+    "forge_snapshot",
+    "forge_validate",
+    "forge_apply_diff",
+    "forge_rollback",
+    "forge_create_skill"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "forge_invoke"
+}

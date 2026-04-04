@@ -1,0 +1,31 @@
+{
+  "director_spot_check_frequency": 5,
+  "spot_check_timeout_minutes": 0,
+  "max_cycle_duration_minutes": 10,
+  "max_tool_calls_per_cycle": 100,
+  "auto_pause_on_regression": true,
+  "snapshot_retention": {
+    "keep_last": 10,
+    "keep_every_nth": 10,
+    "pinned": []
+  },
+  "logging": {
+    "level": "INFO",
+    "stream_to_terminal": true
+  },
+  "eval_concurrency": 2,
+  "eval_category_timeout_seconds": 90,
+  "eval_max_agent_iterations": 15,
+  "eval_request_expiry_minutes": 15,
+  "providers": {
+    "evolution_api": {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "max_tokens": 8192
+    },
+    "meta_eval_api": {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash"
+    }
+  }
+}

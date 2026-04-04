@@ -1,0 +1,31 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Boros Runtime State and Evaluation History
+session/*
+logs/*
+snapshots/*
+tasks/queue/*
+tasks/active/*
+tasks/completed/*
+tasks/learning/*
+evals/scores/*
+commands/*
+memory/evolution_records/*
+memory/experiences/*
+memory/sessions/*
+memory/*.jsonl
+memory/*.db
+skills/*/state/*
+
+# Eval Generator Execution State
+eval-generator/shared/*
+eval-generator/sandboxes/*
+eval-generator/generated-tests/*
+eval-generator/scoring/*
+eval-generator/logs/*
+
+# Exceptions (keep required directories alive in git)
+!eval-generator/shared/.built

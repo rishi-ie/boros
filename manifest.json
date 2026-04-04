@@ -1,0 +1,256 @@
+{
+  "version": "1.0.0",
+  "mode": "evolution",
+  "llm": {
+    "primary": [
+      {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 8192,
+        "temperature": 1.0
+      },
+      {
+        "provider": "gemini",
+        "model": "gemini-1.5-pro",
+        "temperature": 1.0
+      },
+      {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "temperature": 1.0
+      },
+      {
+        "provider": "ollama",
+        "model": "llama3",
+        "base_url": "http://localhost:11434"
+      },
+      {
+        "provider": "openai_compat",
+        "model": "mistral-7b",
+        "base_url": "https://api.together.xyz/v1",
+        "api_key_env": "TOGETHER_API_KEY"
+      }
+    ],
+    "meta_eval": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o"
+      },
+      {
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-20241022"
+      },
+      {
+        "provider": "gemini",
+        "model": "gemini-1.5-pro"
+      }
+    ],
+    "eval_generator": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o"
+      },
+      {
+        "provider": "anthropic",
+        "model": "claude-3-5-sonnet-20241022"
+      }
+    ]
+  },
+  "boot_sequence": [
+    "mode-controller",
+    "memory",
+    "skill-router",
+    "context-orchestration",
+    "reflection",
+    "meta-evolution",
+    "meta-evaluation",
+    "loop-orchestrator"
+  ],
+  "skills": {
+    "mode-controller": {
+      "path": "skills/mode-controller",
+      "type": "boot",
+      "dependencies": [],
+      "provided_functions": [
+        "mode_get",
+        "mode_set"
+      ]
+    },
+    "memory": {
+      "path": "skills/memory",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller"
+      ],
+      "provided_functions": [
+        "memory_page_in",
+        "memory_page_out",
+        "memory_search_sql",
+        "memory_commit_archival"
+      ]
+    },
+    "skill-router": {
+      "path": "skills/skill-router",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller"
+      ],
+      "provided_functions": [
+        "router_get_tools",
+        "router_get_budget",
+        "router_manifest"
+      ]
+    },
+    "context-orchestration": {
+      "path": "skills/context-orchestration",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller",
+        "memory"
+      ],
+      "provided_functions": [
+        "context_load",
+        "context_get_manifest"
+      ]
+    },
+    "reflection": {
+      "path": "skills/reflection",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller",
+        "memory"
+      ],
+      "provided_functions": [
+        "reflection_analyze_trace",
+        "reflection_write_hypothesis",
+        "reflection_read_hypothesis"
+      ]
+    },
+    "meta-evolution": {
+      "path": "skills/meta-evolution",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller",
+        "memory",
+        "reflection"
+      ],
+      "provided_functions": [
+        "evolve_orient",
+        "evolve_set_target",
+        "evolve_propose",
+        "evolve_apply",
+        "evolve_rollback",
+        "evolve_create_skill",
+        "evolve_modify_loop",
+        "evolve_history"
+      ]
+    },
+    "meta-evaluation": {
+      "path": "skills/meta-evaluation",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller",
+        "memory"
+      ],
+      "provided_functions": [
+        "review_proposal",
+        "review_modify",
+        "review_criteria_update",
+        "review_history"
+      ]
+    },
+    "loop-orchestrator": {
+      "path": "skills/loop-orchestrator",
+      "type": "boot",
+      "dependencies": [
+        "mode-controller"
+      ],
+      "provided_functions": [
+        "loop_start",
+        "loop_advance_stage",
+        "loop_end_cycle",
+        "loop_get_state"
+      ]
+    },
+    "skill-forge": {
+      "path": "skills/skill-forge",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "forge_invoke",
+        "forge_test_suite",
+        "forge_snapshot",
+        "forge_validate",
+        "forge_apply_diff",
+        "forge_rollback",
+        "forge_create_skill"
+      ]
+    },
+    "reasoning": {
+      "path": "skills/reasoning",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "reason_decompose",
+        "reason_evaluate_options",
+        "reason_check_logic"
+      ]
+    },
+    "tool-use": {
+      "path": "skills/tool-use",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "tool_terminal",
+        "tool_terminal_input",
+        "tool_terminal_kill",
+        "tool_file_edit_diff"
+      ]
+    },
+    "web-research": {
+      "path": "skills/web-research",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "research_browse",
+        "research_search_engine",
+        "research_archive_source"
+      ]
+    },
+    "eval-bridge": {
+      "path": "skills/eval-bridge",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "eval_request",
+        "eval_read_scores",
+        "eval_backfill",
+        "eval_check_regression",
+        "eval_update_high_water"
+      ]
+    },
+    "eval_util": {
+      "path": "skills/eval_util",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "generate_evaluation_artifact"
+      ]
+    }
+  },
+  "tool_routing": "unconstrained",
+  "_tool_routing_note": "All tools are globally available at all times. Boros's intelligence decides which tools to use. The Skill Router injects the entire tool manifest for every API call. Stage transitions update system prompt context but do not hide/show tools.",
+  "evolution": {
+    "single_proposal_cycles": 20,
+    "max_proposals_per_cycle": 5,
+    "modification_band": {
+      "min_lines": 5,
+      "max_lines": 50
+    },
+    "eval_frequency": 1
+  },
+  "context": {
+    "max_context_tokens": 200000,
+    "memory_token_cap": 8000
+  }
+}

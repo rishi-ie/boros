@@ -1,0 +1,20 @@
+{
+  "name": "eval-bridge",
+  "type": "demand",
+  "description": "To be written.",
+  "dependencies": [],
+  "provided_functions": [
+    "eval_request",
+    "eval_read_scores",
+    "eval_backfill",
+    "eval_check_regression",
+    "eval_update_high_water"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "eval_request"
+}

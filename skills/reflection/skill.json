@@ -1,0 +1,21 @@
+{
+  "name": "reflection",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller",
+    "memory"
+  ],
+  "provided_functions": [
+    "reflection_analyze_trace",
+    "reflection_write_hypothesis",
+    "reflection_read_hypothesis"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "reflection_analyze_trace"
+}

@@ -1,0 +1,22 @@
+{
+  "name": "memory",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller",
+    "identity"
+  ],
+  "provided_functions": [
+    "memory_page_in",
+    "memory_page_out",
+    "memory_search_sql",
+    "memory_commit_archival"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "memory_page_in"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "meta-evolution",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller",
+    "memory",
+    "reflection"
+  ],
+  "provided_functions": [
+    "evolve_orient",
+    "evolve_set_target",
+    "evolve_propose",
+    "evolve_apply",
+    "evolve_rollback",
+    "evolve_create_skill",
+    "evolve_modify_loop",
+    "evolve_history"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "evolve_orient"
+}

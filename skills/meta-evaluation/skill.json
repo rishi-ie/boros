@@ -1,0 +1,22 @@
+{
+  "name": "meta-evaluation",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller",
+    "memory"
+  ],
+  "provided_functions": [
+    "review_proposal",
+    "review_modify",
+    "review_criteria_update",
+    "review_history"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "review_proposal"
+}

@@ -1,0 +1,17 @@
+{
+  "name": "mode-controller",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [],
+  "provided_functions": [
+    "mode_get",
+    "mode_set"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "mode_get"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "tool-use",
+  "type": "demand",
+  "description": "To be written.",
+  "dependencies": [],
+  "provided_functions": [
+    "tool_terminal",
+    "tool_terminal_input",
+    "tool_terminal_kill",
+    "tool_file_edit_diff"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "tool_terminal"
+}

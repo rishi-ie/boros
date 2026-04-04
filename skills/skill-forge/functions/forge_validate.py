@@ -1,0 +1,30 @@
+
+import os, py_compile
+def forge_validate(params: dict, kernel=None) -> dict:
+    """Validate a skill's Python files for syntax errors."""
+    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    skill_name = params.get("target", params.get("skill_name", ""))
+    if not skill_name:
+        return {"status": "error", "message": "skill_name required"}
+
+    func_dir = os.path.join(boros_dir, "skills", skill_name, "functions")
+    if not os.path.isdir(func_dir):
+        return {"status": "error", "message": f"Functions dir not found: {func_dir}"}
+
+    errors = []
+    valid = []
+    for fname in os.listdir(func_dir):
+        if fname.endswith(".py"):
+            fpath = os.path.join(func_dir, fname)
+            try:
+                py_compile.compile(fpath, doraise=True)
+                valid.append(fname)
+            except py_compile.PyCompileError as e:
+                errors.append({"file": fname, "error": str(e)})
+
+    return {
+        "status": "ok" if not errors else "error",
+        "valid_files": valid,
+        "errors": errors,
+        "message": f"{len(valid)} files valid, {len(errors)} errors" 
+    }

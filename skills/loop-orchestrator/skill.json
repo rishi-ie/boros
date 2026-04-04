@@ -1,0 +1,21 @@
+{
+  "name": "loop-orchestrator",
+  "type": "boot",
+  "description": "To be written.",
+  "dependencies": [
+    "mode-controller"
+  ],
+  "provided_functions": [
+    "loop_start",
+    "loop_advance_stage",
+    "loop_end_cycle",
+    "loop_get_state"
+  ],
+  "stage_visibility": [
+    "REFLECT",
+    "EVOLVE",
+    "EVAL"
+  ],
+  "version": "1.0.0",
+  "health_check": "loop_start"
+}
