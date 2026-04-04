@@ -104,4 +104,4 @@ The core philosophy of Boros is that **intelligence belongs in pure, declarative
 
 By isolating intelligence into purely evolvable skills—and minimizing brittle Python algorithms—Boros maintains rapid, resilient self-correction over thousands of cycles. Infinite intelligence is compounded through infinite execution.
 
-FOLLOW x.com/rishi-sidharda
+FOLLOW x.com/rishi-sidharda ok
