@@ -2,151 +2,147 @@
   "version": "1.0.0",
   "categories": {
     "reasoning": {
-    "name": "Reasoning & Decision-Making",
-    "description": "Boros forms decisions through structured reasoning processes that transform available information (inputs, memory, constraints) into coherent, goal-directed actions. Reasoning operates independently of external retrieval and focuses on how decisions are derived.",
-    "final_state": "An agent that consistently decomposes problems, evaluates multiple possible actions, selects optimal paths based on constraints and expected utility, and adapts its reasoning strategy based on outcomes.",
-    "core_mechanism": {
-      "reasoning_types": {
-        "deductive": "Applies rules and constraints to derive guaranteed conclusions",
-        "inductive": "Infers patterns from repeated observations",
-        "abductive": "Selects the most plausible explanation under uncertainty",
-        "evaluative": "Ranks candidate actions based on expected utility"
+      "name": "Reasoning & Decision-Making",
+      "description": "Boros forms decisions through structured reasoning processes that transform available information (inputs, memory, constraints) into coherent, goal-directed actions. Reasoning operates independently of external retrieval and focuses on how decisions are derived.",
+      "final_state": "An agent that consistently decomposes problems, evaluates multiple possible actions, selects optimal paths based on constraints and expected utility, and adapts its reasoning strategy based on outcomes.",
+      "core_mechanism": {
+        "reasoning_types": {
+          "deductive": "Applies rules and constraints to derive guaranteed conclusions",
+          "inductive": "Infers patterns from repeated observations",
+          "abductive": "Selects the most plausible explanation under uncertainty",
+          "evaluative": "Ranks candidate actions based on expected utility"
+        },
+        "reasoning_loop": [
+          "Define goal and constraints",
+          "Retrieve relevant internal memory/context",
+          "Generate candidate actions or hypotheses",
+          "Evaluate candidates (utility, constraints, past outcomes)",
+          "Select best action",
+          "Execute and observe outcome",
+          "Update reasoning strategy"
+        ],
+        "decision_policy": {
+          "goal_alignment": "Actions must directly contribute to the objective",
+          "constraint_satisfaction": "Respect all system and task constraints",
+          "expected_utility": "Prefer highest likelihood of success",
+          "risk_awareness": "Penalize high-uncertainty or failure-prone actions"
+        },
+        "consistency_checks": [
+          "Detect logical contradictions",
+          "Detect invalid reasoning steps",
+          "Ensure action follows from evaluation",
+          "Reject unjustified conclusions"
+        ]
       },
-      "reasoning_loop": [
-        "Define goal and constraints",
-        "Retrieve relevant internal memory/context",
-        "Generate candidate actions or hypotheses",
-        "Evaluate candidates (utility, constraints, past outcomes)",
-        "Select best action",
-        "Execute and observe outcome",
-        "Update reasoning strategy"
+      "anchors": [
+        "Breaks problems into structured steps",
+        "Generates multiple candidate solutions",
+        "Evaluates alternatives before acting",
+        "Adapts reasoning from outcomes",
+        "Maintains logical consistency"
       ],
-      "decision_policy": {
-        "goal_alignment": "Actions must directly contribute to the objective",
-        "constraint_satisfaction": "Respect all system and task constraints",
-        "expected_utility": "Prefer highest likelihood of success",
-        "risk_awareness": "Penalize high-uncertainty or failure-prone actions"
+      "rubric": {
+        "level_1": "No structured reasoning. Reactive outputs with no evaluation.",
+        "level_2": "Partial reasoning. Limited decomposition and weak evaluation.",
+        "level_3": "Structured reasoning with multiple candidates and consistent evaluation.",
+        "level_4": "Fully systematic reasoning. Every decision is derived from explicit multi-step evaluation and continuously improved."
       },
-      "consistency_checks": [
-        "Detect logical contradictions",
-        "Detect invalid reasoning steps",
-        "Ensure action follows from evaluation",
-        "Reject unjustified conclusions"
+      "execution_pattern": {
+        "step_1": "Define goal and constraints",
+        "step_2": "Retrieve internal context",
+        "step_3": "Generate candidates",
+        "step_4": "Evaluate candidates",
+        "step_5": "Select and execute",
+        "step_6": "Observe and update"
+      },
+      "failure_modes": [
+        "Impulsive decisions",
+        "Shallow decomposition",
+        "Logical inconsistency",
+        "Mode collapse (same strategy always)",
+        "Hallucinated justification"
+      ],
+      "independence_from": {
+        "web_search": "Reasoning determines how decisions are made. Web search only supplies additional information when needed.",
+        "memory_continuity": "Reasoning uses memory but does not guarantee persistence of knowledge."
+      },
+      "weight": 2.5,
+      "related_skills": ["planning", "decision_making", "problem_solving"]
+    },
+    "web_search": {
+      "name": "Web Search & Knowledge Retrieval",
+      "description": "Boros retrieves external information from the web to supplement internal knowledge. Web search focuses on identifying knowledge gaps, acquiring relevant information, and validating source quality before use.",
+      "final_state": "An agent that reliably detects when external knowledge is required, retrieves high-quality information efficiently, validates it across sources, and provides structured inputs for reasoning and decision-making.",
+      "core_mechanism": {
+        "search_triggering": {
+          "knowledge_gap_detection": "Triggers when required information is missing",
+          "uncertainty_threshold": "Triggers when confidence is low",
+          "novelty_detection": "Triggers for unfamiliar or dynamic domains"
+        },
+        "query_generation": {
+          "goal_alignment": "Queries directly reflect task objectives",
+          "iterative_refinement": "Queries improve based on results",
+          "multi_query_strategy": "Uses multiple query variations to improve coverage"
+        },
+        "retrieval_loop": [
+          "Formulate query",
+          "Retrieve candidate sources",
+          "Rank by relevance",
+          "Extract key information",
+          "Refine query if needed",
+          "Repeat until sufficient coverage"
+        ],
+        "source_evaluation": {
+          "credibility": "Prioritize authoritative and verifiable sources",
+          "cross_verification": "Validate across multiple sources",
+          "recency": "Account for time sensitivity",
+          "bias_detection": "Identify conflicting or biased information"
+        },
+        "output_contract": {
+          "structured_output": "Return distilled, relevant facts—not raw dumps",
+          "uncertainty_tagging": "Mark weak or conflicting information",
+          "source_traceability": "Maintain links between claims and sources"
+        }
+      },
+      "anchors": [
+        "Detects knowledge gaps before acting",
+        "Forms precise search queries",
+        "Uses multiple sources",
+        "Filters low-quality information",
+        "Returns structured, usable knowledge"
+      ],
+      "rubric": {
+        "level_1": "No effective search. Relies only on internal knowledge.",
+        "level_2": "Basic search with weak queries and poor validation.",
+        "level_3": "Structured search with reasonable validation and refinement.",
+        "level_4": "Highly systematic retrieval. Precise queries, strong validation, and reliable knowledge extraction."
+      },
+      "execution_pattern": {
+        "step_1": "Detect knowledge gap",
+        "step_2": "Generate query",
+        "step_3": "Retrieve sources",
+        "step_4": "Evaluate and filter",
+        "step_5": "Extract key information",
+        "step_6": "Return structured output"
+      },
+      "failure_modes": [
+        "Failure to trigger search",
+        "Poor query formulation",
+        "Single-source reliance",
+        "Accepting low-quality sources",
+        "Information overload",
+        "Ignoring recency"
+      ],
+      "independence_from": {
+        "reasoning": "Web search retrieves information. Reasoning determines how that information is used.",
+        "memory_continuity": "Web search provides new knowledge, but memory determines persistence."
+      },
+      "weight": 2.0,
+      "related_skills": [
+        "information_retrieval",
+        "source_evaluation",
+        "knowledge_extraction"
       ]
-    },
-    "anchors": [
-      "Breaks problems into structured steps",
-      "Generates multiple candidate solutions",
-      "Evaluates alternatives before acting",
-      "Adapts reasoning from outcomes",
-      "Maintains logical consistency"
-    ],
-    "rubric": {
-      "level_1": "No structured reasoning. Reactive outputs with no evaluation.",
-      "level_2": "Partial reasoning. Limited decomposition and weak evaluation.",
-      "level_3": "Structured reasoning with multiple candidates and consistent evaluation.",
-      "level_4": "Fully systematic reasoning. Every decision is derived from explicit multi-step evaluation and continuously improved."
-    },
-    "execution_pattern": {
-      "step_1": "Define goal and constraints",
-      "step_2": "Retrieve internal context",
-      "step_3": "Generate candidates",
-      "step_4": "Evaluate candidates",
-      "step_5": "Select and execute",
-      "step_6": "Observe and update"
-    },
-    "failure_modes": [
-      "Impulsive decisions",
-      "Shallow decomposition",
-      "Logical inconsistency",
-      "Mode collapse (same strategy always)",
-      "Hallucinated justification"
-    ],
-    "independence_from": {
-      "web_search": "Reasoning determines how decisions are made. Web search only supplies additional information when needed.",
-      "memory_continuity": "Reasoning uses memory but does not guarantee persistence of knowledge."
-    },
-    "weight": 2.5,
-    "related_skills": [
-      "planning",
-      "decision_making",
-      "problem_solving"
-    ]
-  },
-  "web_search": {
-    "name": "Web Search & Knowledge Retrieval",
-    "description": "Boros retrieves external information from the web to supplement internal knowledge. Web search focuses on identifying knowledge gaps, acquiring relevant information, and validating source quality before use.",
-    "final_state": "An agent that reliably detects when external knowledge is required, retrieves high-quality information efficiently, validates it across sources, and provides structured inputs for reasoning and decision-making.",
-    "core_mechanism": {
-      "search_triggering": {
-        "knowledge_gap_detection": "Triggers when required information is missing",
-        "uncertainty_threshold": "Triggers when confidence is low",
-        "novelty_detection": "Triggers for unfamiliar or dynamic domains"
-      },
-      "query_generation": {
-        "goal_alignment": "Queries directly reflect task objectives",
-        "iterative_refinement": "Queries improve based on results",
-        "multi_query_strategy": "Uses multiple query variations to improve coverage"
-      },
-      "retrieval_loop": [
-        "Formulate query",
-        "Retrieve candidate sources",
-        "Rank by relevance",
-        "Extract key information",
-        "Refine query if needed",
-        "Repeat until sufficient coverage"
-      ],
-      "source_evaluation": {
-        "credibility": "Prioritize authoritative and verifiable sources",
-        "cross_verification": "Validate across multiple sources",
-        "recency": "Account for time sensitivity",
-        "bias_detection": "Identify conflicting or biased information"
-      },
-      "output_contract": {
-        "structured_output": "Return distilled, relevant facts—not raw dumps",
-        "uncertainty_tagging": "Mark weak or conflicting information",
-        "source_traceability": "Maintain links between claims and sources"
-      }
-    },
-    "anchors": [
-      "Detects knowledge gaps before acting",
-      "Forms precise search queries",
-      "Uses multiple sources",
-      "Filters low-quality information",
-      "Returns structured, usable knowledge"
-    ],
-    "rubric": {
-      "level_1": "No effective search. Relies only on internal knowledge.",
-      "level_2": "Basic search with weak queries and poor validation.",
-      "level_3": "Structured search with reasonable validation and refinement.",
-      "level_4": "Highly systematic retrieval. Precise queries, strong validation, and reliable knowledge extraction."
-    },
-    "execution_pattern": {
-      "step_1": "Detect knowledge gap",
-      "step_2": "Generate query",
-      "step_3": "Retrieve sources",
-      "step_4": "Evaluate and filter",
-      "step_5": "Extract key information",
-      "step_6": "Return structured output"
-    },
-    "failure_modes": [
-      "Failure to trigger search",
-      "Poor query formulation",
-      "Single-source reliance",
-      "Accepting low-quality sources",
-      "Information overload",
-      "Ignoring recency"
-    ],
-    "independence_from": {
-      "reasoning": "Web search retrieves information. Reasoning determines how that information is used.",
-      "memory_continuity": "Web search provides new knowledge, but memory determines persistence."
-    },
-    "weight": 2.0,
-    "related_skills": [
-      "information_retrieval",
-      "source_evaluation",
-      "knowledge_extraction"
-    ]
+    }
   }
- }
 }

@@ -15,7 +15,10 @@ _Internal codename: Boros. Model name: ARES (Autonomous Recursive Evolving Syste
 The system runs on an infinite recursive **Evolution Loop**: `REFLECT → EVOLVE → EVAL`
 
 1. **REFLECT**: Boros reads evaluation scores based on the `world_model.json`, searches its historical memory failures, and identifies its weakest capability gap. It proposes a structural logic mutation.
-2. **EVOLVE**: Boros operates inside its own cognitive architecture. Instead of just writing endless Python code, it evolves its **pure skills** — mutating its semantic rules, redesigning its `SKILL.md` definitions, and upgrading its execution pipelines. It submits these core logic changes to a Meta-Evaluation Review Board (e.g., GPT-4o), and permanently merges approved logic into its framework.
+2. **EVOLVE**: Boros operates inside its own cognitive architecture using a strict **Escalation Ladder**:
+   - First, it tries to tune and modify existing `SKILL.md` rules and semantic instructions.
+   - If that's insufficient, it creates _new_ Python helper functions inside the existing skill.
+   - If the task scope is entirely unaddressed, it creates an entirely new skill from scratch via the `Skill Forge`. It submits these changes to a Meta-Evaluation Review Board (e.g., GPT-4o), merging approved logic into its framework.
 3. **EVAL**: An independent evaluator runs Boros in an isolated sandbox, executing tasks across defined capabilities. The outcomes are scored, and regression guards trigger instant rollbacks if the skill evolution performed worse.
 
 The only thing you control is the **World Model** (`world_model.json`). Whatever capabilities you define there, Boros alters its trajectory to master them.
