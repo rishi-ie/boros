@@ -9,15 +9,23 @@ def forge_rollback(params: dict, kernel=None) -> dict:
     if not skill_name or not snapshot_id:
         return {"status": "error", "message": "skill_name and snapshot_id required"}
 
-    snap_dir = os.path.join(boros_dir, "snapshots", snapshot_id, "functions_backup")
+    snap_root = os.path.join(boros_dir, "snapshots", snapshot_id)
+    func_backup_dir = os.path.join(snap_root, "functions_backup")
     target_dir = os.path.join(boros_dir, "skills", skill_name, "functions")
 
-    if not os.path.isdir(snap_dir):
-        return {"status": "error", "message": f"Snapshot backup not found: {snap_dir}"}
+    if not os.path.isdir(func_backup_dir):
+        return {"status": "error", "message": f"Snapshot backup not found: {func_backup_dir}"}
 
     restored = []
-    for fname in os.listdir(snap_dir):
-        shutil.copy2(os.path.join(snap_dir, fname), os.path.join(target_dir, fname))
+    for fname in os.listdir(func_backup_dir):
+        shutil.copy2(os.path.join(func_backup_dir, fname), os.path.join(target_dir, fname))
         restored.append(fname)
+
+    # Restore SKILL.md if it was included in the snapshot
+    skill_md_backup = os.path.join(snap_root, "SKILL.md")
+    if os.path.exists(skill_md_backup):
+        skill_md_target = os.path.join(boros_dir, "skills", skill_name, "SKILL.md")
+        shutil.copy2(skill_md_backup, skill_md_target)
+        restored.append("SKILL.md")
 
     return {"status": "ok", "message": f"Restored {len(restored)} files for {skill_name}", "files": restored}

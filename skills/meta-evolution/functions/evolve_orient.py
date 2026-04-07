@@ -111,6 +111,12 @@ def evolve_orient(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
 
+    # Infrastructure skills that must never be evolution targets
+    BANNED_SKILLS = {
+        "eval-bridge", "loop-orchestrator", "meta-evaluation",
+        "mode-controller", "context-orchestration", "skill-router"
+    }
+
     # List all skill function files for targeting
     skills_dir = os.path.join(boros_dir, "skills")
     skill_targets = []
@@ -118,6 +124,8 @@ def evolve_orient(params: dict, kernel=None) -> dict:
 
     if os.path.isdir(skills_dir):
         for skill_name in os.listdir(skills_dir):
+            if skill_name in BANNED_SKILLS:
+                continue
             func_dir = os.path.join(skills_dir, skill_name, "functions")
             if not os.path.isdir(func_dir):
                 continue

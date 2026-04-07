@@ -154,43 +154,41 @@ class EvalGenerator:
                 reason += "Transcript contains fatal tool errors. "
             if no_files:
                 reason += "Agent failed to produce any artifacts. "
-            return {"score": 0.0, "quality_reason": reason, "outcome_details": files_str}
+            return {"outcome_score": 0.0, "quality_score": 0.0, "quality_reason": reason, "outcome_details": files_str}
 
-        # ── Layer 2: Structural content checks ───────────────────
-        structural_score = 0.0
+        # ── Layer 2: Outcome score — deterministic artifact checks ──
+        outcome_score = 0.0
         structural_notes = []
 
-        # Check output files have non-trivial content
         non_empty_files = 0
         for fname in file_list:
             fpath = os.path.join(workspace_dir, fname)
             try:
-                size = os.path.getsize(fpath)
-                if size > 10:
+                if os.path.getsize(fpath) > 10:
                     non_empty_files += 1
             except OSError:
                 pass
         if non_empty_files > 0:
-            structural_score += 0.3
+            outcome_score += 0.5
             structural_notes.append(f"{non_empty_files} non-empty output file(s)")
 
-        # Check transcript shows multi-step tool usage (not just one tool call)
         tool_call_count = transcript.count("Tool ")
         if tool_call_count >= 2:
-            structural_score += 0.1
+            outcome_score += 0.25
             structural_notes.append(f"{tool_call_count} tool calls observed")
 
-        # Check if transcript shows task completion signal
         completion_signals = ["status: ok", "successfully", "complete", "finished", "done"]
         if any(sig in transcript.lower() for sig in completion_signals):
-            structural_score += 0.1
+            outcome_score += 0.25
             structural_notes.append("Completion signal detected in transcript")
 
-        # ── Layer 3: LLM grades against discrete rubric levels ───
+        outcome_score = round(min(outcome_score, 1.0), 3)
+
+        # ── Layer 3: Quality score — LLM grades against rubric ──────
         if not self.llm:
-            final_score = min(structural_score + 0.3, 1.0)
             return {
-                "score": round(final_score, 3),
+                "outcome_score": outcome_score,
+                "quality_score": outcome_score,
                 "quality_reason": f"No LLM grader. Structural checks: {'; '.join(structural_notes)}",
                 "outcome_details": files_str
             }
@@ -201,11 +199,14 @@ class EvalGenerator:
         anchors = cat.get("anchors", [])
         anchor_text = "\n".join(f"- {a}" for a in anchors)
 
+        # Use the tail of the transcript so file-creation evidence isn't cut off
+        transcript_window = transcript[-10000:] if len(transcript) > 10000 else transcript
+
         prompt = (
             f"You are grading an AI agent's performance on the '{category_id}' capability.\n\n"
             f"## Rubric\n{rubric_text}\n\n"
             f"## Success Anchors\n{anchor_text}\n\n"
-            f"## Agent Transcript\n{transcript[:3000]}\n\n"
+            f"## Agent Transcript\n{transcript_window}\n\n"
             f"## Workspace Evidence\n{files_str}\n\n"
             f"Assign a rubric level (1, 2, 3, or 4) based strictly on the rubric above. "
             f"Be critical — only award level 4 for genuinely systematic, complete performance.\n\n"
@@ -214,7 +215,6 @@ class EvalGenerator:
         try:
             res = self.llm.complete([{"role": "user", "content": prompt}])
             text = "".join(b.get("text", "") for b in res.get("content", []) if b.get("type") == "text")
-            # Safely extract JSON
             grading = None
             start = text.find("{")
             if start != -1:
@@ -226,12 +226,10 @@ class EvalGenerator:
                         continue
             if grading:
                 level = max(1, min(4, int(grading.get("level", 1))))
-                # Convert rubric level (1-4) to normalized score (0.25-1.0)
-                # Blend with structural checks for robustness
-                llm_score = level / 4.0
-                final_score = round((llm_score * 0.7) + (structural_score * 0.3), 3)
+                quality_score = round(level / 4.0, 3)
                 return {
-                    "score": final_score,
+                    "outcome_score": outcome_score,
+                    "quality_score": quality_score,
                     "rubric_level": level,
                     "quality_reason": grading.get("quality_reason", "LLM graded"),
                     "outcome_details": grading.get("outcome_details", files_str)
@@ -239,11 +237,11 @@ class EvalGenerator:
         except Exception as e:
             _log(f"  Grading LLM call failed: {e}", "WARN")
 
-        # Grading failure: use structural score only, flag as unreliable
-        final_score = round(min(structural_score, 0.4), 3)
+        # Grading failure: outcome score is reliable, quality score is not
         return {
-            "score": final_score,
-            "quality_reason": f"LLM grading failed — structural score only. Notes: {'; '.join(structural_notes)}",
+            "outcome_score": outcome_score,
+            "quality_score": 0.0,
+            "quality_reason": f"LLM grading failed — quality score unreliable. Structural: {'; '.join(structural_notes)}",
             "outcome_details": files_str,
             "grading_reliable": False
         }
@@ -327,11 +325,14 @@ class EvalGenerator:
         _log(f"  [{cat_id}] Grading...", "INFO")
         grade_start = time.time()
         score_data = self._grade_sandbox(transcript, cat_id, workspace_dir)
-        score = score_data["score"]
+        blended = round(
+            score_data["outcome_score"] * 0.5 + score_data["quality_score"] * 0.5, 3
+        )
         grade_time = time.time() - grade_start
 
         total_time = time.time() - cat_start
-        _log(f"  [{cat_id}] Score: {score:.2f} (grade: {grade_time:.1f}s, total: {total_time:.1f}s)", "OK")
+        _log(f"  [{cat_id}] outcome={score_data['outcome_score']:.2f} quality={score_data['quality_score']:.2f} "
+             f"blended={blended:.2f} (grade: {grade_time:.1f}s, total: {total_time:.1f}s)", "OK")
 
         return cat_id, score_data, transcript, task
 
@@ -387,14 +388,13 @@ class EvalGenerator:
                         cat_id = futures[future]
                         try:
                             cat_id, score_data, transcript, task = future.result(timeout=self.category_timeout)
-                            score = score_data["score"]
                             scores[cat_id] = {
-                                "outcome_score": score,
-                                "quality_score": score,
+                                "outcome_score": score_data["outcome_score"],
+                                "quality_score": score_data["quality_score"],
                                 "outcome_weight": 0.5,
                                 "quality_weight": 0.5,
-                                "quality_reason": score_data["quality_reason"],
-                                "outcome_details": score_data["outcome_details"]
+                                "quality_reason": score_data.get("quality_reason", ""),
+                                "outcome_details": score_data.get("outcome_details", "")
                             }
                             transcripts[cat_id] = transcript
                             tasks[cat_id] = task
@@ -421,14 +421,13 @@ class EvalGenerator:
                         cat_id, score_data, transcript, task = self._eval_single_category(
                             cat_id, sandbox_dir, kernel, eval_id
                         )
-                        score = score_data["score"]
                         scores[cat_id] = {
-                            "outcome_score": score,
-                            "quality_score": score,
+                            "outcome_score": score_data["outcome_score"],
+                            "quality_score": score_data["quality_score"],
                             "outcome_weight": 0.5,
                             "quality_weight": 0.5,
-                            "quality_reason": score_data["quality_reason"],
-                            "outcome_details": score_data["outcome_details"]
+                            "quality_reason": score_data.get("quality_reason", ""),
+                            "outcome_details": score_data.get("outcome_details", "")
                         }
                         transcripts[cat_id] = transcript
                         tasks[cat_id] = task
@@ -445,9 +444,12 @@ class EvalGenerator:
             # Cleanup sandbox
             shutil.rmtree(sandbox_dir, ignore_errors=True)
 
-            # Compute composite
-            total_score = sum(s["outcome_score"] for s in scores.values())
-            composite_score = total_score / len(categories) if categories else 0.0
+            # Compute composite: blend outcome (deterministic) and quality (LLM) per category
+            def _blended(s):
+                return s["outcome_score"] * s["outcome_weight"] + s["quality_score"] * s["quality_weight"]
+
+            total_score = sum(_blended(s) for s in scores.values())
+            composite_score = round(total_score / len(categories), 3) if categories else 0.0
 
             # ─── Write result to shared/results ───
             result = {
@@ -455,7 +457,7 @@ class EvalGenerator:
                 "eval_id": eval_id,
                 "timestamp": datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z"),
                 "cycle": cycle,
-                "scores": {k: v["outcome_score"] for k, v in scores.items()},
+                "scores": {k: round(_blended(v), 3) for k, v in scores.items()},
                 "composite": composite_score,
                 "difficulty_level": 5,
                 "scoring_breakdown": scores

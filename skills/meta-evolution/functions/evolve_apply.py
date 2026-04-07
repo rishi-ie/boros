@@ -13,6 +13,22 @@ def evolve_apply(params: dict, kernel=None) -> dict:
     with open(prop_file) as f:
         proposal = json.load(f)
 
+    # Enforce review verdict — refuse to apply if the review board rejected this proposal
+    records_dir = os.path.join(boros_dir, "memory", "evolution_records")
+    review_file = os.path.join(records_dir, f"review-{proposal_id}.json")
+    if os.path.exists(review_file):
+        try:
+            with open(review_file) as f:
+                review = json.load(f)
+            verdict = review.get("verdict", "")
+            if verdict and verdict != "apply":
+                return {
+                    "status": "error",
+                    "message": f"Proposal {proposal_id} was {verdict.upper()} by the review board. Cannot apply. Reason: {review.get('reason', 'unknown')}"
+                }
+        except (json.JSONDecodeError, OSError) as e:
+            return {"status": "error", "message": f"Could not read review record for {proposal_id}: {e}"}
+
     proposal["status"] = "applied"
     proposal["applied_at"] = datetime.datetime.utcnow().isoformat() + "Z"
 

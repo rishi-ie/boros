@@ -206,6 +206,7 @@ class AgentLoop:
                 if elapsed_min > self.max_cycle_minutes:
                     self.log(f"[CYCLE] Time limit ({self.max_cycle_minutes}m) reached.")
                     status = "timeout"
+                    self._ensure_cycle_committed()
                     break
 
                 # Call LLM
@@ -236,6 +237,7 @@ class AgentLoop:
                 # Natural stop
                 if stop_reason == "end_turn":
                     self.log("[CYCLE] LLM ended turn naturally.")
+                    self._ensure_cycle_committed()
                     break
 
                 # Dispatch tool calls
@@ -285,6 +287,7 @@ class AgentLoop:
                     empty_turns += 1
                     if empty_turns >= 3:
                         self.log("[CYCLE] No tool calls despite warnings. Ending.")
+                        self._ensure_cycle_committed()
                         break
                     else:
                         self.log(f"[CYCLE] Enforcing action (warning {empty_turns}/3)")
@@ -308,6 +311,28 @@ class AgentLoop:
 
         self.log(f"[CYCLE] Finished. {tool_call_count} tool calls.")
         return tool_call_count
+
+    def _ensure_cycle_committed(self):
+        """Safety net: if the LLM ends its turn without calling loop_end_cycle,
+        call it automatically so high-water marks and state are always persisted."""
+        state_file = self.boros_root / "session" / "loop_state.json"
+        try:
+            if not state_file.exists():
+                return
+            state = json.loads(state_file.read_text())
+            stage = state.get("stage")
+            # If stage is still active (not None/END), the LLM skipped COMMIT
+            if stage and stage not in (None, "END"):
+                self.log(f"[CYCLE] Safety net: LLM ended without calling loop_end_cycle (stage={stage}). Auto-committing.")
+                if "loop_end_cycle" in self.kernel.registry:
+                    result = self.kernel.registry["loop_end_cycle"]({}, self.kernel)
+                    hw = result.get("high_water_updated", {})
+                    if hw:
+                        self.log(f"[CYCLE] High-water marks updated: {hw}")
+                else:
+                    self.log("[CYCLE] WARNING: loop_end_cycle not in registry — high-water marks not updated.")
+        except Exception as e:
+            self.log(f"[CYCLE] _ensure_cycle_committed failed: {e}")
 
     def run_execution_cycle(self, active_task=None):
         """Run one full execution cycle (acting as a digital employee)."""

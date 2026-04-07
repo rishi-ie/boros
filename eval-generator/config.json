@@ -1,8 +1,0 @@
-{
-  "max_eval_turns": 20,
-  "task_timeout_seconds": 120,
-  "scoring": {
-    "outcome_weight": 0.6,
-    "quality_weight": 0.4
-  }
-}

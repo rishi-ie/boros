@@ -76,36 +76,57 @@ class ToolDispatcher:
                 return {"status": "ok", "message": "Patch applied successfully."}
 
             elif tool_name == "execute_command":
-                # Original simulated subprocess
-                return {"status": "ok", "stdout": "stub output", "stderr": "", "returncode": 0}
-                
-            elif tool_name in ("write_file", "read_file", "list_directory"):
-                # Stub generic tools
-                if tool_name == "write_file":
-                    filepath = self._safe_path(kwargs.get("path", "temp.txt"))
-                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    with open(filepath, "w") as f:
-                        f.write(kwargs.get("content", ""))
-                    return {"status": "ok"}
-                elif tool_name == "read_file":
-                    filepath = self._safe_path(kwargs.get("path", "temp.txt"))
-                    if not os.path.exists(filepath): return {"status": "error", "message": "not found"}
-                    with open(filepath, "r") as f:
-                        content = f.read()
-                    return {"status": "ok", "content": content}
-                elif tool_name == "list_directory":
-                    return {"status": "ok", "files": os.listdir(self.sandbox_path)}
-                elif tool_name == "scratchpad_write":
-                    self.sandbox_scratchpad[kwargs.get("key", "")] = kwargs.get("value", "")
-                    return {"status": "ok"}
-                elif tool_name == "scratchpad_read":
-                    return {"status": "ok", "value": self.sandbox_scratchpad.get(kwargs.get("key", ""))}
-                elif tool_name == "scratchpad_clear":
-                    if kwargs.get("key"):
-                        self.sandbox_scratchpad.pop(kwargs.get("key", ""), None)
-                    else:
-                        self.sandbox_scratchpad.clear()
-                    return {"status": "ok"}
+                # Real subprocess execution in sandbox (same as tool_terminal)
+                command = kwargs.get("command", "")
+                try:
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        cwd=self.sandbox_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    return {
+                        "status": "ok",
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "returncode": result.returncode
+                    }
+                except subprocess.TimeoutExpired:
+                    return {"status": "error", "error": "Command timed out after 30 seconds"}
+
+            elif tool_name == "write_file":
+                filepath = self._safe_path(kwargs.get("path", "temp.txt"))
+                os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                with open(filepath, "w") as f:
+                    f.write(kwargs.get("content", ""))
+                return {"status": "ok"}
+
+            elif tool_name == "read_file":
+                filepath = self._safe_path(kwargs.get("path", "temp.txt"))
+                if not os.path.exists(filepath):
+                    return {"status": "error", "message": "not found"}
+                with open(filepath, "r") as f:
+                    content = f.read()
+                return {"status": "ok", "content": content}
+
+            elif tool_name == "list_directory":
+                return {"status": "ok", "files": os.listdir(self.sandbox_path)}
+
+            elif tool_name == "scratchpad_write":
+                self.sandbox_scratchpad[kwargs.get("key", "")] = kwargs.get("value", "")
+                return {"status": "ok"}
+
+            elif tool_name == "scratchpad_read":
+                return {"status": "ok", "value": self.sandbox_scratchpad.get(kwargs.get("key", ""))}
+
+            elif tool_name == "scratchpad_clear":
+                if kwargs.get("key"):
+                    self.sandbox_scratchpad.pop(kwargs.get("key", ""), None)
+                else:
+                    self.sandbox_scratchpad.clear()
+                return {"status": "ok"}
 
             # ───────────────────────────────────────────────
             # True Boros Capabilities

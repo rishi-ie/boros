@@ -28,8 +28,8 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
                 if latest_scores and kernel and "eval_update_high_water" in kernel.registry:
                     result = kernel.registry["eval_update_high_water"]({"scores": latest_scores}, kernel)
                     hw_updated = result.get("updated_categories", {})
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[loop_end_cycle] WARNING: high-water mark update failed: {e}")
 
     # Clean up session artifacts (keep state files)
     session_dir = os.path.join(boros_dir, "session")
