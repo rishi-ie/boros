@@ -14,6 +14,19 @@ def eval_request(params: dict, kernel=None) -> dict:
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
     }
 
+    # Health check: warn if eval-generator isn't running
+    ready_file = os.path.join(boros_dir, "eval-generator", "shared", ".ready")
+    if not os.path.exists(ready_file):
+        return {
+            "status": "error",
+            "message": (
+                "Eval-generator is not running. Start it first:\n"
+                "  python eval-generator/eval_generator.py\n"
+                "Or use start.py to launch both processes together:\n"
+                "  python start.py"
+            )
+        }
+
     # Write request to shared directory for eval generator to pick up
     requests_dir = os.path.join(boros_dir, "eval-generator", "shared", "requests")
     os.makedirs(requests_dir, exist_ok=True)

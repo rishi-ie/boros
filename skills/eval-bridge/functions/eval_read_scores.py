@@ -1,10 +1,24 @@
 
 import os, json, glob, time
+
+def _get_world_model_version(boros_dir: str) -> str:
+    """Return version string from world_model.json for tagging score history entries."""
+    try:
+        wm_path = os.path.join(boros_dir, "world_model.json")
+        with open(wm_path) as f:
+            wm = json.load(f)
+        categories = sorted(wm.get("categories", {}).keys())
+        return f"{wm.get('version', '?')}:{','.join(categories)}"
+    except Exception:
+        return "unknown"
+
 def eval_read_scores(params: dict, kernel=None) -> dict:
     """Read evaluation scores from the eval-generator results directory."""
     boros_dir = str(kernel.boros_root) if kernel else "boros"
     eval_id = params.get("eval_id", "")
     results_dir = os.path.join(boros_dir, "eval-generator", "shared", "results")
+
+    wm_version = _get_world_model_version(boros_dir)
 
     def _append_to_history(result_data):
         score_hist = os.path.join(boros_dir, "memory", "score_history.jsonl")
@@ -20,8 +34,10 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
                             return # Already appended
             except Exception:
                 pass
+        entry = dict(result_data)
+        entry["world_model_version"] = wm_version  # marks which world model generated this score
         with open(score_hist, "a") as f:
-            f.write(json.dumps(result_data) + "\n")
+            f.write(json.dumps(entry) + "\n")
 
     if eval_id:
         # Strip prefixes to handle LLM hallucinating req- vs eval- prefixes
