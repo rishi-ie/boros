@@ -5,3 +5,5 @@ from .forge_validate import forge_validate
 from .forge_apply_diff import forge_apply_diff
 from .forge_rollback import forge_rollback
 from .forge_create_skill import forge_create_skill
+from .forge_read_skill_md import forge_read_skill_md
+from .forge_edit_skill_md import forge_edit_skill_md

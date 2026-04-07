@@ -46,12 +46,12 @@ Begin a new evolution cycle by executing this strict 4-stage loop: REFLECT (Read
 - ANTI-BRUTE-FORCE RULE: Do NOT brutally loop and change existing Python code over and over. If modifying the code fails repeatedly, you must step back and either write a new function entirely or redirect the logic in the `SKILL.md`.
 - Core files like `agent_loop.py` and `kernel.py` are valid targets ONLY if eval feedback specifically indicates loop-level failures.
 
-## PATH RULES — WINDOWS ENVIRONMENT
+## PATH RULES — PLATFORM AWARE
 
-- Use `type` to read files, `dir` to list directories. Do NOT use `ls` or `cat`.
-- Paths are relative to the boros root. Example: `type skills\\memory\\functions\\memory_page_in.py`
-- Do NOT prefix paths with `boros/` — you are already inside the boros directory.
-- Use backslashes in terminal commands: `dir skills\\memory\\functions\\`
+- The system prompt above tells you your current OS. Follow those platform-specific commands.
+- On Windows: use `type` to read files, `dir` to list. Use backslashes in paths.
+- On Linux/macOS: use `cat` to read files, `ls` to list. Use forward slashes in paths.
+- Paths are relative to the boros root. Do NOT prefix paths with `boros/`.
 
 ## CRITICAL RULES
 

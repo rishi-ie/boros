@@ -19,10 +19,11 @@ def tool_apply_patch(params: dict, kernel=None) -> dict:
         patch_filename = patch_file.name  
   
     try:  
-        # Use subprocess to run git apply  
-        result = subprocess.run(  
-            ["git", "apply", "--unidiff-zero", "--inaccurate-eof", patch_filename],  
-            check=True, capture_output=True, text=True  
+        # Use subprocess to run git apply from the boros root
+        cwd = str(kernel.boros_root) if kernel else None
+        result = subprocess.run(
+            ["git", "apply", "--unidiff-zero", "--inaccurate-eof", patch_filename],
+            check=True, capture_output=True, text=True, cwd=cwd
         )  
         return {"status": "ok", "message": "Patch applied successfully.", "stdout": result.stdout}  
     except subprocess.CalledProcessError as e:  

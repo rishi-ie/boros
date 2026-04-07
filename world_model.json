@@ -67,7 +67,7 @@
         "memory_continuity": "Reasoning uses memory but does not guarantee persistence of knowledge."
       },
       "weight": 2.5,
-      "related_skills": ["planning", "decision_making", "problem_solving"]
+      "related_skills": ["reasoning"]
     },
     "web_search": {
       "name": "Web Search & Knowledge Retrieval",
@@ -139,9 +139,7 @@
       },
       "weight": 2.0,
       "related_skills": [
-        "information_retrieval",
-        "source_evaluation",
-        "knowledge_extraction"
+        "web-research"
       ]
     }
   }

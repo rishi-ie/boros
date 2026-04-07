@@ -44,23 +44,30 @@ def review_proposal(params: dict, kernel=None) -> dict:
                 if block.get("type") == "text":
                     response_text += block["text"]
 
-            # Extract JSON from response
-            import re
-            json_match = re.search(r'\{[^}]+\}', response_text)
-            if json_match:
-                review = json.loads(json_match.group())
-                verdict = review.get("verdict", "apply")
+            # Safely extract the outermost JSON object (handles nested braces)
+            review = None
+            start = response_text.find("{")
+            if start != -1:
+                for end in range(len(response_text), start, -1):
+                    try:
+                        review = json.loads(response_text[start:end])
+                        break
+                    except json.JSONDecodeError:
+                        continue
+
+            if review:
+                verdict = review.get("verdict", "reject")
                 reason = review.get("reason", "LLM review")
                 confidence = review.get("confidence", 0.5)
             else:
-                verdict = "apply"
-                reason = f"LLM responded but no parseable JSON: {response_text[:200]}"
-                confidence = 0.3
+                verdict = "reject"
+                reason = f"LLM responded but no parseable JSON found. Rejecting for safety. Response: {response_text[:200]}"
+                confidence = 0.2
 
         except Exception as e:
-            verdict = "apply"
-            reason = f"Meta-eval LLM call failed ({e}), defaulting to apply."
-            confidence = 0.2
+            verdict = "reject"
+            reason = f"Meta-eval LLM call failed ({e}). Rejecting for safety — will retry next cycle."
+            confidence = 0.1
     else:
         # Rule-based fallback
         verdict = "apply"

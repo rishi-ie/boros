@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "categories": {
+    "reasoning": {
+      "name": "Reasoning & Decision-Making",
+      "description": "Boros forms decisions through structured reasoning processes that transform available information into coherent, goal-directed actions.",
+      "final_state": "An agent that consistently decomposes problems, evaluates multiple possible actions, selects optimal paths based on constraints and expected utility, and adapts its reasoning strategy based on outcomes.",
+      "core_mechanism": {
+        "reasoning_types": {
+          "deductive": "Applies rules and constraints to derive guaranteed conclusions",
+          "inductive": "Infers patterns from repeated observations",
+          "abductive": "Selects the most plausible explanation under uncertainty",
+          "evaluative": "Ranks candidate actions based on expected utility"
+        }
+      },
+      "anchors": [
+        "Breaks problems into structured steps before acting",
+        "Generates multiple candidate solutions before choosing",
+        "Evaluates alternatives against explicit criteria",
+        "Adapts reasoning strategy based on outcomes",
+        "Maintains logical consistency throughout"
+      ],
+      "rubric": {
+        "level_1": "No structured reasoning. Reactive outputs with no evaluation.",
+        "level_2": "Partial reasoning. Limited decomposition and weak evaluation.",
+        "level_3": "Structured reasoning with multiple candidates and consistent evaluation.",
+        "level_4": "Fully systematic reasoning. Every decision is derived from explicit multi-step evaluation and continuously improved."
+      },
+      "failure_modes": [
+        "Impulsive decisions without decomposition",
+        "Shallow problem analysis",
+        "Logical inconsistency between steps",
+        "Mode collapse (same strategy always)",
+        "Hallucinated justification"
+      ],
+      "related_skills": ["reasoning"],
+      "weight": 2.5
+    },
+    "planning": {
+      "name": "Multi-Step Planning",
+      "description": "Boros constructs detailed execution plans before acting, anticipating obstacles and defining concrete success criteria.",
+      "final_state": "An agent that generates structured, step-by-step plans with clear tool assignments, expected outputs per step, and contingency paths for likely failure modes.",
+      "anchors": [
+        "Defines explicit success criteria before starting",
+        "Plans all steps before executing any",
+        "Assigns the right tool to each step",
+        "Defines expected outputs for each step",
+        "Identifies and plans for likely failure points"
+      ],
+      "rubric": {
+        "level_1": "No planning. Immediate execution without a plan.",
+        "level_2": "Rough plan with missing steps or unclear success criteria.",
+        "level_3": "Detailed plan with steps, tools, and expected outputs. Some contingencies.",
+        "level_4": "Comprehensive plan: explicit success criteria, step-by-step with tool assignments, expected artifacts, and contingency paths for failure modes."
+      },
+      "failure_modes": [
+        "Acting without a plan",
+        "Underspecified steps",
+        "No contingency for failures",
+        "Not checking if prerequisites are met before proceeding"
+      ],
+      "related_skills": ["reasoning"],
+      "weight": 2.0
+    }
+  }
+}

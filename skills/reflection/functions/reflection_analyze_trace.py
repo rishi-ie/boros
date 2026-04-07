@@ -95,51 +95,61 @@ def reflection_analyze_trace(params: dict, kernel=None) -> dict:
         "category_analysis": analysis,
         "weakest_category": weakest_category,
         "weakest_score": round(lowest_avg, 3),
-        "recommendation": _generate_detailed_recommendation(weakest_category, lowest_avg, feedback) if weakest_category else "No score data available. Run evaluations first."
+        "recommendation": _generate_detailed_recommendation(
+            weakest_category, lowest_avg, feedback,
+            cat_data=active_categories.get(weakest_category)
+        ) if weakest_category else "No score data available. Run evaluations first."
     }
 
-def _generate_detailed_recommendation(category, score, feedback):
+def _generate_detailed_recommendation(category, score, feedback, cat_data=None):
     reason = feedback.get("quality_reason", "No specific reason given")
     outcome = feedback.get("outcome_details", "No detailed outcomes logged")
-    
+
     recommendation = (
-        f"To improve '{category}' (avg: {score:.3f}), you must address actual evaluation failures.\n"
-        f"Eval Sandbox Feedback: {reason}\n"
+        f"To improve '{category}' (avg: {score:.3f}), address the actual evaluation failures below.\n"
+        f"Eval Feedback: {reason}\n"
         f"Outcome Details: {outcome}\n\n"
     )
 
-    if category == "memory_continuity":
-        if "fatal tool errors" in reason.lower() or "failed tool call" in outcome.lower() or "tool error" in outcome.lower() or "transcript ends before task iterations" in reason.lower():
-            recommendation += (
-                "**Actionable Memory & Continuity Insights (Tool Errors Detected):**\n"
-                "- **Environment Initialization:** Ensure the necessary files and directories are created and correctly populated *before* attempting core task logic. Verify paths, permissions, and file content immediately after creation using `tool_terminal` (`type` or `dir`).\n"
-                "- **Tool Call Sequencing:** Explicitly plan the order of tool calls. If a task requires writing a file and then executing a script that reads that file, ensure the write operation completes successfully before the execute operation begins. Look for missing intermediate verification steps.\n"
-                "- **Pre-computation/Pre-analysis:** Before beginning an iterative task, perform an initial `tool_terminal` `dir` listing of the eval sandbox to understand the initial state and potential pitfalls. Use `tool_terminal` `type` to inspect any provided files. This helps prevent blind execution.\n"
-                "- **Failure Recovery Plan:** If an initial tool call fails, log the error to episodic memory (`memory_commit_archival`) and try a different approach or re-verify the environment. Do not proceed with subsequent steps if foundational tools have failed.\n"
-                "- **Verify Execution Context:** Ensure the executed script or command has the correct working directory and necessary arguments. Check if a script needs to be made executable or if specific interpreters are required.\n"
-                "- **Iterative Trace Analysis:** For multi-iteration tasks, specifically review the trace for the *first* iteration's success. Failures there often propagate. Look for evidence of file creation, modification, and successful execution of the *initial* steps within the evaluation environment.\n"
-            )
-        else:
-            recommendation += (
-                "**Memory & Continuity Insights:**\n"
-                "- **Structured Recall:** Ensure that relevant past experiences and rules are actively retrieved and applied to current decision-making. Is `memory_page_in` being called with appropriate `source` and `limit` to get necessary context?\n"
-                "- **Abstraction Refinement:** If general rules are being abstracted, are they accurate and robust enough to handle variations and edge cases? Consider how new information refines existing abstractions.\n"
-                "- **Adaptive Planning:** Does the agent's action plan dynamically adapt based on the outcomes of previous actions? Look for explicit logic that modifies the plan based on success or failure.\n"
-                "- **Avoiding Regression:** Implement checks to ensure that new actions do not inadvertently reintroduce previously solved failure modes. Leverage historical `evolution_records` and `experiences` for this.\n"
-                "- **Contextual Awareness:** Verify that the system is leveraging its current session context effectively, not just raw memory entries. Is `context_load` being used at the start of cycles to get relevant information?\n"
-            )
-    elif category == "reasoning_architecture":
-        recommendation += (
-            f"**Actionable Architectural Insights:**\n"
-            f"- Consider reviewing the current flow of information between skills. Are there bottlenecks or inefficient data transfers?\n"
-            f"- Evaluate the modularity and separation of concerns within the code. Can any components be more independent?\n"
-            f"- Look for opportunities to introduce caching or optimize frequently accessed data structures.\n"
-            f"- Ensure that error handling and recovery mechanisms are robust and well-defined.\n"
-            f"- If outcome details were more granular, we could pinpoint exact code sections. Future evaluations should aim to log more specific failure points (e.g., line numbers, specific API calls that failed).\n\n"
-        )
-    
+    # Pull insights dynamically from world model category definition
+    if cat_data:
+        failure_modes = cat_data.get("failure_modes", [])
+        anchors = cat_data.get("anchors", [])
+        rubric = cat_data.get("rubric", {})
+        related_skills = cat_data.get("related_skills", [])
+
+        if failure_modes:
+            recommendation += "**Known Failure Modes to Address:**\n"
+            for fm in failure_modes:
+                recommendation += f"- {fm}\n"
+            recommendation += "\n"
+
+        if anchors:
+            recommendation += "**Target Anchors (what the eval checks for):**\n"
+            for anchor in anchors:
+                recommendation += f"- {anchor}\n"
+            recommendation += "\n"
+
+        if rubric:
+            current_level = "level_1"
+            if score >= 0.75:
+                current_level = "level_3"
+            elif score >= 0.5:
+                current_level = "level_2"
+            next_level = {"level_1": "level_2", "level_2": "level_3", "level_3": "level_4"}.get(current_level, "level_4")
+            current_desc = rubric.get(current_level, "")
+            next_desc = rubric.get(next_level, "")
+            if current_desc and next_desc:
+                recommendation += f"**Current Level ({current_level}):** {current_desc}\n"
+                recommendation += f"**Target Next Level ({next_level}):** {next_desc}\n\n"
+
+        if related_skills:
+            recommendation += f"**Skills to Target:** {', '.join(related_skills)}\n\n"
+
     recommendation += (
-        f"Generate a hypothesis that makes CONCRETE logical and algorithmic improvements. Do NOT just change prompt strings or formatting. Look deeply at the underlying data structures, API interactions, or workflow constraints causing this failure."
+        "Generate a hypothesis that makes CONCRETE logical and algorithmic improvements. "
+        "Do NOT change only prompt strings, comments, or formatting. "
+        "Look at the underlying data structures, control flow, and tool interactions causing failures."
     )
-    
+
     return recommendation

@@ -131,15 +131,25 @@ class AgentLoop:
                 "**DO NOT target eval-bridge. DO NOT write hypotheses. Just get scores first.**"
             )
 
-        # 9. Environment reminder
-        parts.append(
-            "## Environment\n"
-            "- OS: Windows. Use `dir` and `type` commands, NOT `ls` or `cat`.\n"
-            "- CWD: The boros root directory. Paths are relative to here.\n"
-            "- Example: `type skills\\memory\\functions\\memory_page_in.py`\n"
-            "- Do NOT prefix paths with `boros/` — you are already inside boros.\n"
-            "- Use backslashes for Windows paths in terminal commands."
-        )
+        # 9. Environment reminder (platform-aware)
+        import platform
+        os_name = platform.system()
+        if os_name == "Windows":
+            env_note = (
+                "## Environment\n"
+                "- OS: Windows. Use `dir` to list directories, `type` to read files.\n"
+                "- Do NOT use `ls` or `cat` — they will fail.\n"
+                "- Use backslashes in terminal paths: `type skills\\memory\\functions\\memory_page_in.py`\n"
+                "- CWD is the boros root. Do NOT prefix paths with `boros/`."
+            )
+        else:
+            env_note = (
+                "## Environment\n"
+                f"- OS: {os_name}. Use `ls` to list directories, `cat` to read files.\n"
+                "- Use forward slashes in paths: `cat skills/memory/functions/memory_page_in.py`\n"
+                "- CWD is the boros root. Do NOT prefix paths with `boros/`."
+            )
+        parts.append(env_note)
 
         return "\n\n---\n\n".join(parts)
 

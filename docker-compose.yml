@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  boros:
+    build: .
+    container_name: boros
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    volumes:
+      # Persist runtime state across container restarts
+      - ./session:/app/session
+      - ./logs:/app/logs
+      - ./snapshots:/app/snapshots
+      - ./evals:/app/evals
+      - ./memory:/app/memory
+      - ./tasks:/app/tasks
+      - ./commands:/app/commands
+      - ./eval-generator/shared:/app/eval-generator/shared
+      - ./eval-generator/generated-tests:/app/eval-generator/generated-tests
+      - ./eval-generator/logs:/app/eval-generator/logs
+      - ./eval-generator/scoring:/app/eval-generator/scoring
+      # Mount world model so you can edit it without rebuilding
+      - ./world_model.json:/app/world_model.json
+      - ./config.json:/app/config.json
+    restart: unless-stopped

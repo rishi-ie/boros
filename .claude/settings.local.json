@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /e/code/vrenv22/boros -path */.github/* -o -path */.gitlab/*)"
+    ]
+  }
+}

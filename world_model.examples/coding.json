@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "categories": {
+    "code_generation": {
+      "name": "Code Generation & Software Engineering",
+      "description": "Boros writes correct, idiomatic, and efficient code to solve programming tasks. It reads existing code, plans modifications, implements changes, and verifies correctness.",
+      "final_state": "An agent that reliably implements software features end-to-end: reads relevant code, plans changes, writes idiomatic implementations, handles edge cases, and verifies correctness through testing.",
+      "anchors": [
+        "Reads target files before modifying them",
+        "Plans the implementation before writing code",
+        "Writes syntactically correct code on first attempt",
+        "Handles error cases and edge conditions",
+        "Verifies changes by running tests or executing the code"
+      ],
+      "rubric": {
+        "level_1": "Writes code without reading context. Syntax errors common. No verification.",
+        "level_2": "Reads some context. Code is mostly correct but misses edge cases. No testing.",
+        "level_3": "Reads full context, plans changes, writes correct code. Basic verification.",
+        "level_4": "End-to-end implementation: thorough reading, structured planning, correct idiomatic code, edge cases handled, verified through execution."
+      },
+      "failure_modes": [
+        "Modifying files without reading them first",
+        "Writing code without understanding the existing architecture",
+        "Missing import statements or dependency declarations",
+        "Ignoring edge cases and error paths",
+        "Not verifying that changes work"
+      ],
+      "related_skills": ["reasoning", "tool-use"],
+      "weight": 2.0
+    },
+    "debugging": {
+      "name": "Debugging & Root Cause Analysis",
+      "description": "Boros identifies and fixes bugs by reading error messages, tracing execution, forming hypotheses about root causes, and applying targeted fixes.",
+      "final_state": "An agent that systematically diagnoses bugs: reads error messages carefully, traces the call stack, identifies root causes (not symptoms), applies targeted fixes, and verifies the fix resolves the issue.",
+      "anchors": [
+        "Reads the full error message before acting",
+        "Traces the error to its root cause (not just the symptom)",
+        "Forms a hypothesis before applying a fix",
+        "Applies a targeted fix without breaking other functionality",
+        "Verifies the fix by re-running the failing case"
+      ],
+      "rubric": {
+        "level_1": "Applies random fixes without reading the error. Trial and error.",
+        "level_2": "Reads errors but addresses symptoms rather than root causes.",
+        "level_3": "Identifies root causes and applies correct fixes. Basic verification.",
+        "level_4": "Systematic diagnosis: full error reading, stack trace analysis, root cause hypothesis, targeted fix, verification, and documentation of the fix."
+      },
+      "failure_modes": [
+        "Fixing symptoms rather than root causes",
+        "Applying fixes without reading the full error",
+        "Introducing new bugs while fixing the original",
+        "Not verifying that the fix works"
+      ],
+      "related_skills": ["reasoning", "tool-use"],
+      "weight": 1.5
+    }
+  }
+}

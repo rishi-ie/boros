@@ -1,6 +1,8 @@
 import os
 import json
+import time
 import urllib.request
+import urllib.error
 import uuid
 from boros.adapters.base_adapter import BaseAdapter
 
@@ -89,11 +91,29 @@ class GeminiAdapter(BaseAdapter):
         data_bytes = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(url, data=data_bytes, headers={"Content-Type": "application/json"})
 
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read())
-        except Exception as e:
-            raise e
+        data = None
+        last_error = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    data = json.loads(resp.read())
+                break
+            except urllib.error.HTTPError as e:
+                last_error = e
+                if e.code == 429:
+                    wait = (2 ** attempt) * 5
+                    print(f"[Gemini] Rate limited (429). Retrying in {wait}s (attempt {attempt+1}/3)...")
+                    time.sleep(wait)
+                else:
+                    raise
+            except Exception as e:
+                last_error = e
+                if attempt < 2:
+                    time.sleep(2 ** attempt * 2)
+                else:
+                    raise
+        if data is None:
+            raise RuntimeError(f"Gemini API failed after 3 attempts: {last_error}")
 
         # 4. Parse the output
         output_content = []

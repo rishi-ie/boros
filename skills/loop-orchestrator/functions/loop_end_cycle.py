@@ -39,7 +39,8 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             if item not in keep and not os.path.isdir(os.path.join(session_dir, item)):
                 try:
                     os.remove(os.path.join(session_dir, item))
-                except: pass
+                except OSError:
+                    pass
 
     # Log
     log_file = os.path.join(boros_dir, "logs", "cycles.log")

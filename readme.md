@@ -1,107 +1,173 @@
 # Boros (ARES)
 
-**An unconstrained, self-evolving AI substrate.**
+**An open-source, self-evolving AI substrate.**
 
-Boros acts as a deeply agentic autonomous entity that improves itself automatically by rewriting its own internal architecture. It authors new cognitive pipelines, generates executable SWE capabilities, and edits its declarative skill definitions to overcome weaknesses. Every improvement is compiled, rigorously tested, scored by an independent evaluation loop, and either permanently merged or rolled back.
+Boros autonomously improves its own capabilities by rewriting its internal skill architecture, testing every change in an isolated sandbox, and rolling back anything that regresses. The only thing you configure is the **World Model** — a JSON file that defines what capabilities Boros should master. Everything else is automatic.
 
-The ceiling is whatever the underlying language model is capable of — that state is called **Prime Boros**.
-
-_Internal codename: Boros. Model name: ARES (Autonomous Recursive Evolving System). Public product: Axiom. By Mumbrane Labs._
+> Internal codename: Boros. Model name: ARES (Autonomous Recursive Evolving System). By Mumbrane Labs.
 
 ---
 
-## 🧬 How It Works
+## How It Works
 
-The system runs on an infinite recursive **Evolution Loop**: `REFLECT → EVOLVE → EVAL`
+Boros runs an infinite **Evolution Loop**:
 
-1. **REFLECT**: Boros reads evaluation scores based on the `world_model.json`, searches its historical memory failures, and identifies its weakest capability gap. It proposes a structural logic mutation.
-2. **EVOLVE**: Boros operates inside its own cognitive architecture using a strict **Escalation Ladder**:
-   - First, it tries to tune and modify existing `SKILL.md` rules and semantic instructions.
-   - If that's insufficient, it creates _new_ Python helper functions inside the existing skill.
-   - If the task scope is entirely unaddressed, it creates an entirely new skill from scratch via the `Skill Forge`. It submits these changes to a Meta-Evaluation Review Board (e.g., GPT-4o), merging approved logic into its framework.
-3. **EVAL**: An independent evaluator runs Boros in an isolated sandbox, executing tasks across defined capabilities. The outcomes are scored, and regression guards trigger instant rollbacks if the skill evolution performed worse.
+```
+REFLECT → EVOLVE → VALIDATE → COMMIT
+```
 
-The only thing you control is the **World Model** (`world_model.json`). Whatever capabilities you define there, Boros alters its trajectory to master them.
+1. **REFLECT** — Reads evaluation scores, identifies the weakest capability from the World Model, analyzes score history, and forms an improvement hypothesis.
+2. **EVOLVE** — Targets the relevant skill and improves it following a strict escalation ladder:
+   - First: modify the skill's `SKILL.md` semantic rules (fastest, safest)
+   - Second: add new Python functions inside the skill
+   - Third: create an entirely new skill from scratch
+3. **VALIDATE** — An independent eval-generator runs Boros on sandbox tasks and scores its performance (0.0–1.0, graded against each capability's rubric). Regression against the high-water mark triggers automatic rollback.
+4. **COMMIT** — Approved improvements are committed to evolution records and loaded live without restarting.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
 - Python 3.11+
-- Anthropic API key (Claude — primary substrate)
-- OpenAI API key (GPT-4o — meta-evaluation board & independent eval generator)
+- At least one API key:
+  - **Gemini** (default): `GEMINI_API_KEY`
+  - **Anthropic**: `ANTHROPIC_API_KEY`
+  - **OpenAI**: `OPENAI_API_KEY`
 
 ### 2. Setup
-
-Clone the repository and install dependencies.
 
 ```bash
 git clone <repo-url>
 cd boros
+pip install -r requirements.txt
 
-# Copy environment template
 cp .env.template .env
-# Edit .env and supply your ANTHROPIC_API_KEY and OPENAI_API_KEY
+# Edit .env and add your API keys
 ```
 
-### 3. Customize Your World Model
+### 3. Configure the World Model
 
-The `world_model.json` file dictates what Boros is optimizing for. Out of the box, it targets two core domains:
+Edit `world_model.json` to define what Boros should evolve toward. See `world_model.examples/` for ready-made configurations (coding, research, reasoning).
 
-- **Reasoning & Decision-Making**
-- **Web Search & Knowledge Retrieval**
+The default world model targets **Reasoning** and **Web Search**. To change what Boros evolves, simply edit this file — it's picked up on every cycle automatically.
 
-Feel free to edit these categories to point Boros in any direction. Adding a new category here automatically shifts the evolution strategy.
-
-### 4. Boot the Substrate
-
-Start the system through the kernel.
+### 4. Start Boros
 
 ```bash
-python kernel.py
+python run.py
 ```
 
-You will enter the Director terminal. The kernel loads 15 skills, boot-checks constraints, and begins Cycle 1.
+This starts both the kernel and the eval-generator together. You'll enter the **Director terminal**.
 
+**Director commands:**
+- `boros status` — show current cycle, stage, and mode
+- `boros view context` — inspect active memory and scores
+- `boros task "..."` — submit a task (switches to Execution Mode)
+- `boros set-mode execution` — switch to task execution mode
+- `boros set-mode evolution` — switch back to self-evolution mode
+
+### 5. (Optional) Docker
+
+```bash
+docker-compose up
 ```
-Seed state initialized successfully.
-[Kernel] Synced categories.json with world_model.json
-boros> status
-Cycle: 1 | Mode: evolution | Stage: REFLECT
-```
-
-**Commands:**
-
-- `boros status`: Show current loop progress.
-- `boros view context`: Inspect what's active in memory.
-- `boros task "..."`: Drop a task into the execution queue (Execution Mode).
-- `boros set-mode execution`: Switch from autonomous evolution to functional task-execution mode.
 
 ---
 
-## 📊 Proof of Evolution: A Real Case Study
+## Customizing the World Model
 
-**Objective:** Evolve the "Reasoning & Decision-Making" capability from baseline reactive outputs to consistent, multi-step structural decomposition.
+The `world_model.json` file is the only thing that controls what Boros evolves toward. Add any capability you want:
 
-- **Cycle 1 (Baseline Analysis):** Boros attempts a sandbox evaluation for Reasoning. It scores **1.2/4.0**. The evaluator flags _Impulsive decisions_ and _Shallow decomposition_—Boros jumped to execution without verifying logic.
-- **Cycle 3 (Reflection):** Reading the score history, Boros's internal reflection logs: _"Identified missing evaluation logic in the reasoning skill. We are failing to generate candidate hypothesis matrices before acting."_
-- **Cycle 4 (Evolution Mutation):** Boros enters the `Skill Forge` and rewrites the semantic rules and pipeline for its reasoning skill. It dictates a new utility mechanism that strictly enforces candidate review against constraints before taking real-world action. The Meta-Eval board signs off on the airtight process logic.
-- **Cycle 5 (Execution & Re-Eval):** The sandbox issues a fresh complex logic task. Guided by its evolved skill structure, Boros systematically breaks down the problem. The external evaluator grants a score of **3.5/4.0**. The new High-Water Mark is set, and the evolved skill stabilizes.
+```json
+{
+  "categories": {
+    "your_capability": {
+      "name": "Human Readable Name",
+      "description": "What this capability means",
+      "anchors": ["Observable behavior 1", "Observable behavior 2"],
+      "rubric": {
+        "level_1": "Baseline / failure",
+        "level_2": "Partial capability",
+        "level_3": "Functional",
+        "level_4": "Full mastery"
+      },
+      "failure_modes": ["Common failure 1", "Common failure 2"],
+      "related_skills": ["reasoning"],
+      "weight": 2.0
+    }
+  }
+}
+```
 
-_Outcome:_ Boros autonomously rewrote its own cognitive framework to "think" better.
+**`related_skills` must match directory names in `skills/`.**
+
+See `world_model.examples/` for complete working examples.
 
 ---
 
-## 🧠 Architecture Principles: Intelligence in Skills, Not Code
+## Architecture
 
-The core philosophy of Boros is that **intelligence belongs in pure, declarative skills rather than hardcoded Python scripts.**
+### The Kernel (250 lines)
+`kernel.py` is intentionally minimal: config loading, skill registration, and routing. Zero intelligence lives here.
 
-- **The Kernel**: ~250 lines of bare-bones routing logic. It handles basic I/O and loop orchestration, possessing zero inherent intelligence.
-- **The 15 Pure Skills**: Operational capacities (Memory, Terminal Use, API calling, Reflection) are structured linearly as `Skills`. Boros improves by reshaping the high-level semantic behavior, validation steps, and internal directives within these modular capabilities.
-- **Associative Memory Engine**: Boros uses a localized SQLite + Vector database hierarchy to instantly page context in and out dynamically, enabling compounded semantic memory.
+### 15 Modular Skills
+Intelligence lives in skills. Each skill has:
+- `SKILL.md` — behavioral rules and semantic instructions (primary evolution target)
+- `functions/` — Python implementations
+- `state/` — persistent runtime state
+- `tests/` — health checks
 
-By isolating intelligence into purely evolvable skills—and minimizing brittle Python algorithms—Boros maintains rapid, resilient self-correction over thousands of cycles. Infinite intelligence is compounded through infinite execution.
+**Boot skills** (always loaded): `mode-controller`, `memory`, `skill-router`, `context-orchestration`, `reflection`, `meta-evolution`, `meta-evaluation`, `loop-orchestrator`
 
-FOLLOW x.com/rishi-sidharda ok
+**Demand skills** (loaded when needed): `reasoning`, `tool-use`, `web-research`, `eval-bridge`, `skill-forge`, `director-interface`, `eval_util`
+
+### The Eval Generator
+A separate process (`eval-generator/eval_generator.py`) that:
+1. Generates tasks from world model rubrics and anchors
+2. Runs Boros in an isolated sandbox with tool access
+3. Grades output using deterministic checks + LLM rubric scoring
+4. Returns scores to the main loop
+
+`run.py` starts both processes together and manages their lifecycle.
+
+### Memory
+- **File store**: JSON files in `memory/experiences/`, `memory/evolution_records/`
+- **SQLite + FTS5**: `memory/memory.db` for fast full-text search across all archived experiences
+- **Score history**: `memory/score_history.jsonl` — append-only log of every eval result
+
+---
+
+## Environment Variables
+
+```
+# Required (pick at least one)
+GEMINI_API_KEY=         # For Gemini provider (default)
+ANTHROPIC_API_KEY=      # For Anthropic/Claude provider
+OPENAI_API_KEY=         # For OpenAI provider
+
+# Optional
+TOGETHER_API_KEY=       # For Together.xyz (openai_compat provider)
+```
+
+Configure which provider drives evolution and meta-evaluation in `config.json`:
+
+```json
+"providers": {
+  "evolution_api": {"provider": "gemini", "model": "gemini-2.5-flash"},
+  "meta_eval_api": {"provider": "gemini", "model": "gemini-2.5-flash"}
+}
+```
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add world model categories, new skills, and LLM adapters.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

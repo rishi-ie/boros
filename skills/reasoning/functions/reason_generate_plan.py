@@ -50,13 +50,19 @@ Generate the JSON plan now.
         # Extract the JSON part from the response text
         text_content = "".join(b.get("text", "") for b in response.get("content", []) if b.get("type") == "text")
         
-        # Use regex to find the JSON object, accommodating potential markdown code blocks
-        match = re.search(r'\{.*\}', text_content, re.DOTALL)
-        
-        if not match:
-            return {"status": "error", "message": "No valid JSON object found in the LLM response.", "raw_response": text_content}
+        # Safely extract the outermost JSON object (handles nested braces)
+        start = text_content.find("{")
+        plan_json = None
+        if start != -1:
+            for end in range(len(text_content), start, -1):
+                try:
+                    plan_json = json.loads(text_content[start:end])
+                    break
+                except json.JSONDecodeError:
+                    continue
 
-        plan_json = json.loads(match.group())
+        if plan_json is None:
+            return {"status": "error", "message": "No valid JSON object found in the LLM response.", "raw_response": text_content}
 
         # Basic validation of the generated plan structure
         if "plan" not in plan_json or not isinstance(plan_json["plan"], list):

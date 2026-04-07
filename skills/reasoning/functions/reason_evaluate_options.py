@@ -1,56 +1,55 @@
 
 import re
 
-def reason_evaluate_options(options: list[str], criteria: str) -> dict:
-    # This is a simplified example. A full implementation would likely involve
-    # more sophisticated NLP for criteria parsing and a more robust scoring model.
+def reason_evaluate_options(params: dict, kernel=None) -> dict:
+    """Evaluate multiple options against criteria. Returns ranked assessment."""
+    options = params.get("options", [])
+    criteria = params.get("criteria", "")
 
-    ranked_options = []
-    
-    # 1. Basic Criteria Parsing: Identify keywords and potential constraints
-    # This is a simplified approach, a more advanced version would use NLU.
-    criteria_keywords = [word.lower() for word in re.findall(r'\b\w+\b', criteria) if len(word) > 2]
-    
-    # Simple scoring based on keyword matching
-    for i, option in enumerate(options):
+    if not options:
+        return {"status": "error", "message": "options list required"}
+    if not criteria:
+        return {"status": "error", "message": "criteria string required"}
+
+    # Prefer LLM-based evaluation when available
+    if kernel and hasattr(kernel, "evolution_llm"):
+        prompt = (
+            f"You are a structured decision-making assistant. Evaluate each option below against the stated criteria.\n\n"
+            f"Criteria: {criteria}\n\n"
+            f"Options:\n" + "\n".join(f"{i+1}. {o}" for i, o in enumerate(options)) + "\n\n"
+            f"For each option provide a score (0-10) and a concise rationale. "
+            f"Respond ONLY as a valid JSON array:\n"
+            f'[{{"option": "...", "score": 8, "rationale": "..."}}]'
+        )
+        try:
+            res = kernel.evolution_llm.complete(
+                [{"role": "user", "content": prompt}],
+                system="You are a structured evaluator. Output only the JSON array."
+            )
+            text = "".join(b.get("text", "") for b in res.get("content", []) if b.get("type") == "text")
+            match = re.search(r'\[.*\]', text, flags=re.DOTALL)
+            if match:
+                ranked = __import__("json").loads(match.group())
+                ranked.sort(key=lambda x: x.get("score", 0), reverse=True)
+                return {"status": "ok", "ranked_options": ranked, "method": "llm"}
+        except Exception as e:
+            print(f"reason_evaluate_options: LLM call failed ({e}), falling back to heuristic.")
+
+    # Heuristic fallback: keyword scoring
+    criteria_keywords = [w.lower() for w in re.findall(r'\b\w+\b', criteria) if len(w) > 2]
+    ranked = []
+    for option in options:
         score = 0
         rationale = []
-        lower_option = option.lower()
-
-        # Check for positive matches
-        for keyword in criteria_keywords:
-            if keyword in lower_option:
+        lower_opt = option.lower()
+        for kw in criteria_keywords:
+            if kw in lower_opt:
                 score += 1
-                rationale.append(f"Matches '{keyword}'")
-
-        # Basic trade-off (example: 'cost' vs 'quality') - highly simplified
-        if "cost" in criteria.lower() and "low cost" in lower_option:
-            score += 2 # Higher score for explicit low cost
-            rationale.append("Prioritizes low cost as per criteria")
-        elif "quality" in criteria.lower() and "high quality" in lower_option:
-            score += 2 # Higher score for explicit high quality
-            rationale.append("Prioritizes high quality as per criteria")
-
-        # Implicit constraint detection (example: "safe" or "secure")
-        if "safe" in criteria.lower() or "secure" in criteria.lower():
-            if "risk" not in lower_option and "vulnerable" not in lower_option:
-                score += 1
-                rationale.append("No explicit safety/security risks mentioned, aligning with implicit constraints")
-            else:
-                score -= 1 # Penalize if risks are mentioned
-                rationale.append("Potential safety/security concerns identified")
-
-        ranked_options.append({
+                rationale.append(f"matches '{kw}'")
+        ranked.append({
             "option": option,
             "score": score,
-            "rationale": ". ".join(rationale) if rationale else "No specific criteria matches found."
+            "rationale": "; ".join(rationale) if rationale else "No keyword matches found."
         })
-    
-    # Sort options by score in descending order
-    ranked_options.sort(key=lambda x: x["score"], reverse=True)
-
-    # Generate an artifact for evaluation purposes
-    if kernel:
-        kernel.invoke("eval_util", "generate_evaluation_artifact", {"content": {"options": ranked_options, "criteria": criteria}, "artifact_name": "evaluated_options"})
-
-    return {"status": "ok", "ranked_options": ranked_options, "note": "Options evaluated with a basic scoring model for generative depth."}
+    ranked.sort(key=lambda x: x["score"], reverse=True)
+    return {"status": "ok", "ranked_options": ranked, "method": "heuristic"}

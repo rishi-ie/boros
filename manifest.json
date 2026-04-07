@@ -183,7 +183,9 @@
         "forge_validate",
         "forge_apply_diff",
         "forge_rollback",
-        "forge_create_skill"
+        "forge_create_skill",
+        "forge_read_skill_md",
+        "forge_edit_skill_md"
       ]
     },
     "reasoning": {
@@ -193,7 +195,8 @@
       "provided_functions": [
         "reason_decompose",
         "reason_evaluate_options",
-        "reason_check_logic"
+        "reason_check_logic",
+        "reason_generate_plan"
       ]
     },
     "tool-use": {

@@ -138,54 +138,115 @@ class EvalGenerator:
     # Grading
     # ─────────────────────────────────────────────────────────
     def _grade_sandbox(self, transcript, category_id, workspace_dir):
-        if not self.llm:
-            return {"score": 0.5, "quality_reason": "No LLM adapter loaded", "outcome_details": "N/A"}
-
-        # Check actual files in workspace
+        # ── Layer 1: Objective deterministic checks ───────────────
         file_list = []
         if workspace_dir and os.path.exists(workspace_dir):
-            file_list = [f for f in os.listdir(workspace_dir) if os.path.isfile(os.path.join(workspace_dir, f))]
-            files_str = f"Files created: {', '.join(file_list)}" if file_list else "No files created."
-        else:
-            files_str = "No workspace details found."
+            file_list = [f for f in os.listdir(workspace_dir)
+                         if os.path.isfile(os.path.join(workspace_dir, f))]
+        files_str = f"Files created: {', '.join(file_list)}" if file_list else "No files created."
 
         has_error = "Error:" in transcript
         no_files = len(file_list) == 0
 
-        # Objective constraints: immediately fail if errors or no output
         if has_error or no_files:
             reason = "Task execution failed objectively. "
-            if has_error: reason += "Transcript contains fatal tool errors. "
-            if no_files: reason += "Agent failed to produce any artifacts. "
-            reason += "Score algorithmically capped at 0.0."
+            if has_error:
+                reason += "Transcript contains fatal tool errors. "
+            if no_files:
+                reason += "Agent failed to produce any artifacts. "
             return {"score": 0.0, "quality_reason": reason, "outcome_details": files_str}
 
+        # ── Layer 2: Structural content checks ───────────────────
+        structural_score = 0.0
+        structural_notes = []
+
+        # Check output files have non-trivial content
+        non_empty_files = 0
+        for fname in file_list:
+            fpath = os.path.join(workspace_dir, fname)
+            try:
+                size = os.path.getsize(fpath)
+                if size > 10:
+                    non_empty_files += 1
+            except OSError:
+                pass
+        if non_empty_files > 0:
+            structural_score += 0.3
+            structural_notes.append(f"{non_empty_files} non-empty output file(s)")
+
+        # Check transcript shows multi-step tool usage (not just one tool call)
+        tool_call_count = transcript.count("Tool ")
+        if tool_call_count >= 2:
+            structural_score += 0.1
+            structural_notes.append(f"{tool_call_count} tool calls observed")
+
+        # Check if transcript shows task completion signal
+        completion_signals = ["status: ok", "successfully", "complete", "finished", "done"]
+        if any(sig in transcript.lower() for sig in completion_signals):
+            structural_score += 0.1
+            structural_notes.append("Completion signal detected in transcript")
+
+        # ── Layer 3: LLM grades against discrete rubric levels ───
+        if not self.llm:
+            final_score = min(structural_score + 0.3, 1.0)
+            return {
+                "score": round(final_score, 3),
+                "quality_reason": f"No LLM grader. Structural checks: {'; '.join(structural_notes)}",
+                "outcome_details": files_str
+            }
+
         cat = self.world_model["categories"].get(category_id, {})
-        level_4 = cat.get("rubric", {}).get("level_4", "Excellent")
+        rubric = cat.get("rubric", {})
+        rubric_text = "\n".join(f"Level {k[-1]}: {v}" for k, v in rubric.items() if v)
+        anchors = cat.get("anchors", [])
+        anchor_text = "\n".join(f"- {a}" for a in anchors)
+
         prompt = (
-            f"Review this sandbox transcript for the category '{category_id}'.\n\n"
-            f"Level 4 criteria: {level_4}\n\nTranscript:\n{transcript}\n\n"
-            f"Workspace evidence: {files_str}\n\n"
-            f"Provide actionable structural feedback. Did the agent output real code? Did it finish the task? "
-            f"STRICT INSTRUCTION: Provide a score from 0.0 to 1.0. If the output does not fully solve the task "
-            f"or lacks meaningful programmatic elements, penalize heavily. "
-            f'Output ONLY a valid JSON object: {{"score": <float between 0.0 and 1.0>, "quality_reason": "...", "outcome_details": "..."}}'
+            f"You are grading an AI agent's performance on the '{category_id}' capability.\n\n"
+            f"## Rubric\n{rubric_text}\n\n"
+            f"## Success Anchors\n{anchor_text}\n\n"
+            f"## Agent Transcript\n{transcript[:3000]}\n\n"
+            f"## Workspace Evidence\n{files_str}\n\n"
+            f"Assign a rubric level (1, 2, 3, or 4) based strictly on the rubric above. "
+            f"Be critical — only award level 4 for genuinely systematic, complete performance.\n\n"
+            f'Output ONLY this JSON: {{"level": <1-4>, "quality_reason": "...", "outcome_details": "..."}}'
         )
         try:
             res = self.llm.complete([{"role": "user", "content": prompt}])
             text = "".join(b.get("text", "") for b in res.get("content", []) if b.get("type") == "text")
-            import re
-            match = re.search(r'\{[^}]+\}', text, re.DOTALL)
-            if match:
-                data = json.loads(match.group())
+            # Safely extract JSON
+            grading = None
+            start = text.find("{")
+            if start != -1:
+                for end in range(len(text), start, -1):
+                    try:
+                        grading = json.loads(text[start:end])
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            if grading:
+                level = max(1, min(4, int(grading.get("level", 1))))
+                # Convert rubric level (1-4) to normalized score (0.25-1.0)
+                # Blend with structural checks for robustness
+                llm_score = level / 4.0
+                final_score = round((llm_score * 0.7) + (structural_score * 0.3), 3)
                 return {
-                    "score": float(data.get("score", 0.5)),
-                    "quality_reason": data.get("quality_reason", "No reason given"),
-                    "outcome_details": data.get("outcome_details", files_str)
+                    "score": final_score,
+                    "rubric_level": level,
+                    "quality_reason": grading.get("quality_reason", "LLM graded"),
+                    "outcome_details": grading.get("outcome_details", files_str)
                 }
         except Exception as e:
             _log(f"  Grading LLM call failed: {e}", "WARN")
-        return {"score": 0.5, "quality_reason": "Grading failed", "outcome_details": files_str}
+
+        # Grading failure: use structural score only, flag as unreliable
+        final_score = round(min(structural_score, 0.4), 3)
+        return {
+            "score": final_score,
+            "quality_reason": f"LLM grading failed — structural score only. Notes: {'; '.join(structural_notes)}",
+            "outcome_details": files_str,
+            "grading_reliable": False
+        }
 
     # ─────────────────────────────────────────────────────────
     # Single-category evaluation (runs in thread)

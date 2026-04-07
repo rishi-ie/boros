@@ -1,0 +1,58 @@
+{
+  "version": "1.0.0",
+  "categories": {
+    "web_research": {
+      "name": "Web Research & Knowledge Synthesis",
+      "description": "Boros retrieves external information from the web, evaluates source quality, synthesizes findings across multiple sources, and produces structured, actionable knowledge outputs.",
+      "final_state": "An agent that reliably detects knowledge gaps, retrieves high-quality information from multiple sources, cross-validates claims, filters low-quality content, and returns structured summaries with source attribution.",
+      "anchors": [
+        "Detects when external knowledge is needed before acting",
+        "Generates precise, targeted search queries",
+        "Consults multiple sources rather than relying on one",
+        "Identifies and discards low-credibility sources",
+        "Returns structured output with clear source attribution"
+      ],
+      "rubric": {
+        "level_1": "Relies only on internal knowledge. Does not search even when information is clearly outdated or unknown.",
+        "level_2": "Searches occasionally. Single-source reliance. Does not validate or cross-check.",
+        "level_3": "Searches proactively. Uses multiple sources. Basic quality filtering. Returns organized summaries.",
+        "level_4": "Systematic research: detects gaps, precise queries, multi-source cross-validation, bias detection, structured output with uncertainty markers and source links."
+      },
+      "failure_modes": [
+        "Hallucinating facts instead of searching",
+        "Using a single source without cross-checking",
+        "Poor query formulation yielding irrelevant results",
+        "Accepting low-quality or outdated sources",
+        "Returning raw information without synthesis"
+      ],
+      "related_skills": ["web-research", "reasoning"],
+      "weight": 2.0
+    },
+    "fact_verification": {
+      "name": "Fact Verification & Source Validation",
+      "description": "Boros verifies claims by checking them against multiple authoritative sources and clearly marks confidence levels.",
+      "final_state": "An agent that challenges its own assumptions, verifies key claims through primary sources, identifies contradictions between sources, and returns confidence-annotated findings.",
+      "anchors": [
+        "Questions its own assumptions before acting on them",
+        "Verifies claims through at least two independent sources",
+        "Identifies contradictions between sources",
+        "Marks uncertain or unverifiable claims clearly",
+        "Cites sources for all key factual claims"
+      ],
+      "rubric": {
+        "level_1": "Accepts information at face value without verification.",
+        "level_2": "Occasionally checks facts but not systematically.",
+        "level_3": "Verifies important claims. Uses multiple sources for key facts.",
+        "level_4": "Rigorous verification: challenges assumptions, dual-source minimum, contradiction detection, explicit confidence levels, full source citation."
+      },
+      "failure_modes": [
+        "Presenting unverified claims as facts",
+        "Relying on a single source",
+        "Not flagging uncertainty",
+        "Ignoring contradicting evidence"
+      ],
+      "related_skills": ["web-research", "reasoning"],
+      "weight": 1.5
+    }
+  }
+}

@@ -68,6 +68,8 @@ TOOL_SCHEMAS = {
     "forge_rollback": _s("forge_rollback", "Rollback a target to a previous snapshot.", {"target": {"type": "string"}, "snapshot_id": {"type": "string"}}, ["target", "snapshot_id"]),
     "forge_invoke": _s("forge_invoke", "Invoke a specific function from a skill for testing.", {"function_name": {"type": "string"}, "params": {"type": "object"}}, ["function_name"]),
     "forge_create_skill": _s("forge_create_skill", "Scaffold a new skill directory with standard structure.", {"skill_name": {"type": "string"}, "description": {"type": "string"}, "functions": {"type": "array", "items": {"type": "string"}}}, ["skill_name", "description", "functions"]),
+    "forge_read_skill_md": _s("forge_read_skill_md", "Read the SKILL.md for a skill. Returns full content and parsed sections. Use before editing.", {"skill_name": {"type": "string"}}, ["skill_name"]),
+    "forge_edit_skill_md": _s("forge_edit_skill_md", "Edit a specific section of a SKILL.md file. This is Escalation Ladder Step 1 — always try semantic changes before code changes.", {"skill_name": {"type": "string"}, "section_name": {"type": "string", "description": "The ## section header to replace (e.g. 'Role', 'Rules', 'Pipeline')"}, "new_content": {"type": "string", "description": "The new content for this section"}}, ["skill_name", "section_name", "new_content"]),
 
 
 
@@ -75,6 +77,7 @@ TOOL_SCHEMAS = {
     "reason_decompose": _s("reason_decompose", "Decompose a complex problem into sub-problems. Returns structured breakdown.", {"problem": {"type": "string"}}, ["problem"]),
     "reason_evaluate_options": _s("reason_evaluate_options", "Evaluate multiple options against criteria. Returns ranked assessment.", {"options": {"type": "array", "items": {"type": "string"}}, "criteria": {"type": "string"}}, ["options", "criteria"]),
     "reason_check_logic": _s("reason_check_logic", "Check an argument for logical consistency. Returns assessment.", {"argument": {"type": "string"}}, ["argument"]),
+    "reason_generate_plan": _s("reason_generate_plan", "Generate a structured step-by-step execution plan for a complex problem.", {"problem": {"type": "string"}}, ["problem"]),
 
 
 
