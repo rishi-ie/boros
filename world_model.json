@@ -67,7 +67,8 @@
         "memory_continuity": "Reasoning uses memory but does not guarantee persistence of knowledge."
       },
       "weight": 2.5,
-      "related_skills": ["reasoning"]
+      "related_skills": ["reasoning"],
+      "task_template": "This task requires EXPLICIT structured reasoning. You MUST follow this process before producing any output: (1) Call reason_decompose to break the problem into sub-problems. (2) Identify at least 2 candidate approaches and call reason_evaluate_options to score them against stated criteria. (3) Write a file called reasoning_trace.txt that documents your decomposition, the candidates you considered, their scores, and your final selection with justification. (4) Only then execute the chosen solution. Tasks that skip decomposition or produce output without documented reasoning will score at Level 1."
     },
     "web_search": {
       "name": "Web Search & Knowledge Retrieval",
@@ -140,7 +141,8 @@
       "weight": 2.0,
       "related_skills": [
         "web-research"
-      ]
+      ],
+      "task_template": "This task requires active web research. You MUST NOT rely on assumed prior knowledge. Follow this process: (1) Before doing anything, identify every piece of information the task requires that you cannot verify from memory. (2) Call research_search_engine at least once per identified knowledge gap — minimum 2 separate searches total. (3) Produce a file called sources.txt listing every URL you retrieved information from and the date accessed. (4) Every factual claim in your output must be traceable to a source in sources.txt. Tasks that skip searching or produce outputs without sourced facts will score at Level 1."
     }
   }
 }

@@ -14,8 +14,9 @@
     "stream_to_terminal": true
   },
   "eval_concurrency": 2,
-  "eval_category_timeout_seconds": 90,
+  "eval_category_timeout_seconds": 300,
   "eval_max_agent_iterations": 15,
+  "eval_tasks_per_category": 3,
   "eval_request_expiry_minutes": 15,
   "providers": {
     "evolution_api": {

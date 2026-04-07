@@ -105,29 +105,38 @@ class EvalGenerator:
         if not cat or not self.llm:
             return "Write a script that prints Hello World to output.txt."
 
-        # Build rich context from world model fields
         anchors = cat.get("anchors", [])
         rubric_l4 = cat.get("rubric", {}).get("level_4", "Excellent performance")
         exec_pattern = cat.get("execution_pattern", {})
         failure_modes = cat.get("failure_modes", [])
+        task_template = cat.get("task_template", "")
 
-        # Pick a random anchor and failure mode to vary tasks
         import random
         anchor = random.choice(anchors) if anchors else "general capability"
         failure = random.choice(failure_modes) if failure_modes else "generic failure"
 
+        template_instruction = (
+            f"\n\nCRITICAL: The task you generate MUST require the agent to follow this behavioral pattern:\n"
+            f"{task_template}\n"
+            f"Design the scenario so that skipping these steps makes the task impossible to complete correctly."
+        ) if task_template else ""
+
         prompt = (
-            f"Create a concrete, verifiable programming task that tests the '{category_id}' capability.\n\n"
+            f"Create a concrete, verifiable task that tests the '{category_id}' capability.\n\n"
             f"The task must specifically test this anchor criterion: '{anchor}'\n"
             f"The gold standard (Level 4) is: '{rubric_l4}'\n"
             f"Design the task to expose this failure mode: '{failure}'\n\n"
             f"Execution pattern the agent should follow:\n"
-            + "\n".join(f"  {k}: {v}" for k, v in exec_pattern.items()) + "\n\n"
-            f"The task must be executable in a python sandbox and verifiable by checking file outputs. "
+            + "\n".join(f"  {k}: {v}" for k, v in exec_pattern.items())
+            + template_instruction + "\n\n"
+            f"The task must be verifiable by checking file outputs in a sandbox. "
             f"Output just the task prompt, nothing else."
         )
         try:
-            res = self.llm.complete([{"role": "user", "content": prompt}], system="You generate targeted evaluation tasks. Output only the task prompt.")
+            res = self.llm.complete(
+                [{"role": "user", "content": prompt}],
+                system="You generate targeted evaluation tasks. Output only the task prompt."
+            )
             text = "".join(b.get("text", "") for b in res.get("content", []) if b.get("type") == "text")
             return text.strip() or "Write a python script to output.txt"
         except Exception as e:
@@ -247,31 +256,26 @@ class EvalGenerator:
         }
 
     # ─────────────────────────────────────────────────────────
-    # Single-category evaluation (runs in thread)
+    # Single task run (one task, one agent execution, one grade)
     # ─────────────────────────────────────────────────────────
-    def _eval_single_category(self, cat_id, sandbox_dir, kernel, eval_id):
-        """Evaluate a single category. Returns (cat_id, score_data, transcript, task)."""
-        cat_start = time.time()
-        cat_dir = os.path.join(sandbox_dir, cat_id)
-        workspace_dir = os.path.join(cat_dir, "workspace")
-        os.makedirs(workspace_dir, exist_ok=True)
+    def _run_single_task(self, cat_id, workspace_dir, kernel, task_template_injection):
+        """Run one task for a category. Returns (score_data, transcript, task)."""
+        from boros.agent_loop import AgentLoop
 
         # 1. Generate task
-        _log(f"  [{cat_id}] Generating task...", "INFO")
         task = self._generate_task(cat_id)
-        _log(f"  [{cat_id}] Task generated ({len(task)} chars, {time.time()-cat_start:.1f}s)", "OK")
 
         dispatcher = ToolDispatcher(workspace_dir, kernel)
 
-        # 2. Run mini agent loop
-        from boros.agent_loop import AgentLoop
+        # 2. Build system prompt — inject task_template as a mandatory behavioral instruction
         sandbox_loop = AgentLoop(kernel, log_callback=lambda m: None)
-        system_prompt = sandbox_loop._execution_prompt() + "\n\n" + sandbox_loop.build_system_prompt()
-        
-        messages = [{"role": "user", "content": f"Task: {task}\nSolve this using your tools."}]
+        base_system = sandbox_loop._execution_prompt() + "\n\n" + sandbox_loop.build_system_prompt()
+        if task_template_injection:
+            system_prompt = base_system + f"\n\n## MANDATORY BEHAVIOR FOR THIS EVALUATION\n{task_template_injection}"
+        else:
+            system_prompt = base_system
 
-        # Dynamically load all demand tools to ensure the Sandbox can actually test new capabilities.
-        # We explicitly ban 'skill-forge' and 'eval-bridge' to prevent the Sandbox from recursively editing the main Boros codebase or starting nested evals.
+        # 3. Build tool list — demand skills minus banned ones
         tools = []
         banned_sandbox_skills = {"skill-forge", "eval-bridge"}
         for skill_name, s_info in kernel.manifest.get("skills", {}).items():
@@ -279,14 +283,15 @@ class EvalGenerator:
                 for func_name in s_info.get("provided_functions", []):
                     if func_name in TOOL_SCHEMAS:
                         tools.append(TOOL_SCHEMAS[func_name])
-
         tools.extend([
-            {"name": "write_file", "description": "Write a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}}},
-            {"name": "read_file", "description": "Read a file", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}
+            {"name": "write_file", "description": "Write a file to the workspace", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}}},
+            {"name": "read_file", "description": "Read a file from the workspace", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}
         ])
 
+        messages = [{"role": "user", "content": f"Task: {task}\nSolve this using your tools."}]
         transcript = f"Task: {task}\n\n"
 
+        # 4. Run agent
         if self.actor_llm:
             for iteration in range(self.max_agent_iterations):
                 iter_start = time.time()
@@ -309,32 +314,83 @@ class EvalGenerator:
 
                     iter_time = time.time() - iter_start
                     tool_names = [b["name"] for b in content if b.get("type") == "tool_use"]
-                    _log(f"  [{cat_id}] Iteration {iteration+1}/{self.max_agent_iterations}: "
-                         f"tools=[{', '.join(tool_names)}] ({iter_time:.1f}s)", "INFO")
+                    _log(f"    [{cat_id}] iter {iteration+1}: tools=[{', '.join(tool_names)}] ({iter_time:.1f}s)", "INFO")
 
                     if not has_tool:
-                        _log(f"  [{cat_id}] Agent finished (no more tool calls)", "OK")
                         break
                     messages.append({"role": "user", "content": tool_results})
                 except Exception as loop_e:
                     transcript += f"Error: {loop_e}\n"
-                    _log(f"  [{cat_id}] Agent loop error: {loop_e}", "ERR")
+                    _log(f"    [{cat_id}] Agent loop error: {loop_e}", "ERR")
                     break
 
-        # 3. Grade
-        _log(f"  [{cat_id}] Grading...", "INFO")
-        grade_start = time.time()
+        # 5. Grade
         score_data = self._grade_sandbox(transcript, cat_id, workspace_dir)
-        blended = round(
-            score_data["outcome_score"] * 0.5 + score_data["quality_score"] * 0.5, 3
-        )
-        grade_time = time.time() - grade_start
+        return score_data, transcript, task
+
+    # ─────────────────────────────────────────────────────────
+    # Multi-task category evaluation — runs N tasks, averages scores
+    # ─────────────────────────────────────────────────────────
+    def _eval_single_category(self, cat_id, sandbox_dir, kernel, eval_id):
+        """Evaluate a single category over N tasks. Returns (cat_id, averaged_score_data, combined_transcript, first_task)."""
+        cat_start = time.time()
+        num_tasks = self.config.get("eval_tasks_per_category", 3)
+
+        cat = self.world_model["categories"].get(cat_id, {})
+        task_template = cat.get("task_template", "")
+
+        _log(f"  [{cat_id}] Running {num_tasks} task(s)...", "INFO")
+
+        outcome_scores = []
+        quality_scores = []
+        combined_transcript = ""
+        first_task = None
+        last_score_data = {}
+
+        for i in range(num_tasks):
+            workspace_dir = os.path.join(sandbox_dir, cat_id, f"task_{i+1}", "workspace")
+            os.makedirs(workspace_dir, exist_ok=True)
+
+            _log(f"  [{cat_id}] Task {i+1}/{num_tasks}...", "INFO")
+            try:
+                score_data, transcript, task = self._run_single_task(
+                    cat_id, workspace_dir, kernel, task_template
+                )
+                outcome_scores.append(score_data["outcome_score"])
+                quality_scores.append(score_data["quality_score"])
+                combined_transcript += f"\n--- Task {i+1} ---\n{transcript}"
+                last_score_data = score_data
+                if first_task is None:
+                    first_task = task
+                blended = round(score_data["outcome_score"] * 0.5 + score_data["quality_score"] * 0.5, 3)
+                _log(f"  [{cat_id}] Task {i+1}: outcome={score_data['outcome_score']:.2f} "
+                     f"quality={score_data['quality_score']:.2f} blended={blended:.2f}", "OK")
+            except Exception as e:
+                _log(f"  [{cat_id}] Task {i+1} failed: {e}", "ERR")
+                outcome_scores.append(0.0)
+                quality_scores.append(0.0)
+                combined_transcript += f"\n--- Task {i+1} FAILED: {e} ---\n"
+
+        # Average across all task runs
+        avg_outcome = round(sum(outcome_scores) / len(outcome_scores), 3) if outcome_scores else 0.0
+        avg_quality = round(sum(quality_scores) / len(quality_scores), 3) if quality_scores else 0.0
+        avg_blended = round(avg_outcome * 0.5 + avg_quality * 0.5, 3)
+
+        averaged_score_data = {
+            "outcome_score": avg_outcome,
+            "quality_score": avg_quality,
+            "quality_reason": last_score_data.get("quality_reason", ""),
+            "outcome_details": f"Averaged over {num_tasks} task runs. Individual outcomes: {outcome_scores}",
+            "task_count": num_tasks,
+            "individual_outcome_scores": outcome_scores,
+            "individual_quality_scores": quality_scores
+        }
 
         total_time = time.time() - cat_start
-        _log(f"  [{cat_id}] outcome={score_data['outcome_score']:.2f} quality={score_data['quality_score']:.2f} "
-             f"blended={blended:.2f} (grade: {grade_time:.1f}s, total: {total_time:.1f}s)", "OK")
+        _log(f"  [{cat_id}] FINAL avg outcome={avg_outcome:.2f} quality={avg_quality:.2f} "
+             f"blended={avg_blended:.2f} ({num_tasks} tasks, {total_time:.1f}s total)", "OK")
 
-        return cat_id, score_data, transcript, task
+        return cat_id, averaged_score_data, combined_transcript, first_task
 
     # ─────────────────────────────────────────────────────────
     # Full request processing

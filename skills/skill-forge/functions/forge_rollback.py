@@ -28,4 +28,11 @@ def forge_rollback(params: dict, kernel=None) -> dict:
         shutil.copy2(skill_md_backup, skill_md_target)
         restored.append("SKILL.md")
 
-    return {"status": "ok", "message": f"Restored {len(restored)} files for {skill_name}", "files": restored}
+    # Hot-reload the skill so the restored code is live immediately (not just on disk)
+    if kernel and hasattr(kernel, "reload_skill"):
+        try:
+            kernel.reload_skill(skill_name)
+        except Exception as e:
+            return {"status": "ok", "message": f"Restored {len(restored)} files for {skill_name} but hot-reload failed: {e}", "files": restored}
+
+    return {"status": "ok", "message": f"Restored {len(restored)} files for {skill_name} and hot-reloaded.", "files": restored}
