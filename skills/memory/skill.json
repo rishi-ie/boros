@@ -10,7 +10,9 @@
     "memory_page_in",
     "memory_page_out",
     "memory_search_sql",
-    "memory_commit_archival"
+    "memory_commit_archival",
+    "memory_kg_write",
+    "memory_kg_query"
   ],
   "stage_visibility": [
     "REFLECT",

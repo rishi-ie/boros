@@ -17,11 +17,29 @@ The memory system currently uses flat JSON/JSONL file storage:
 
 ## Functions
 
-### memory_page_in(source, limit)
+### memory_page_in(source, limit, skill?, outcome?, tags?)
 
 Load entries from a specific memory source into the current context.
 
-Sources: `scores`, `experiences`, `evolution_records`, `sessions`
+Sources: `scores`, `experiences`, `evolution_records`, `sessions`, `session_buffer`
+
+**Filtering (evolution_records source):**
+- `skill` — partial match against `target_skill` field (e.g. `"reasoning"` finds all cycles targeting reasoning)
+- `outcome` — exact match: `improved`, `regressed`, `neutral`, `baseline`
+
+**Filtering (experiences source):**
+- `tags` — array of strings; returns entries matching any tag
+
+Use this in REFLECT to load targeted history:
+```
+memory_page_in({"source": "evolution_records", "skill": "reasoning", "limit": 8})
+→ last 8 evolution cycles that targeted reasoning, newest first
+
+memory_page_in({"source": "evolution_records", "skill": "reasoning", "outcome": "regressed"})
+→ only the cycles that made reasoning worse — avoid repeating these
+```
+
+Each evolution_record entry contains: `target_skill`, `rationale`, `actual_outcome`, `score_delta`, `score_before`, `score_after`, `cycle`, `timestamp`.
 
 ```
 → {"status": "ok", "source": str, "entries": list, "count": int}
@@ -49,6 +67,42 @@ Commit a structured entry to long-term archival memory (experiences). Entry type
 
 ```
 → {"status": "ok", "entry_id": str}
+```
+
+### memory_kg_write(subject, predicate, object, cycle?, valid_from?, metadata?)
+
+Record a temporal fact about a skill or category. Facts have validity windows — you can query what was true at a specific cycle, not just right now.
+
+**Common predicates:**
+- `has_score` — `("reasoning", "has_score", "0.72", cycle=5)`
+- `was_modified` — `("reasoning", "was_modified", "reflection.py", cycle=5)`
+- `achieved_milestone` — `("reasoning", "achieved_milestone", "L1", cycle=12)`
+- `caused_delta_in` — `("reasoning", "caused_delta_in", "web_search:+0.01", cycle=5)` — cross-category link
+- `target_of` — `("reflection", "target_of", "hyp-abc123", cycle=5)`
+
+Call after every successful evolution (record `was_modified`) and after every eval (record `has_score`).
+
+```
+→ {"status": "ok", "triple_id": int}
+```
+
+### memory_kg_query(subject, predicate?, as_of?, include_history?)
+
+Query facts about a skill or category.
+
+```
+memory_kg_query({"subject": "reasoning"})
+→ all currently valid facts about reasoning
+
+memory_kg_query({"subject": "reasoning", "predicate": "has_score", "include_history": true})
+→ full score history for reasoning across all cycles
+
+memory_kg_query({"subject": "reflection", "as_of": "2026-04-01T00:00:00Z"})
+→ what was true about reflection on April 1st
+```
+
+```
+→ {"status": "ok", "subject": str, "facts": list[{predicate, object, valid_from, cycle}], "count": int}
 ```
 
 ---

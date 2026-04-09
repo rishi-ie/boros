@@ -25,21 +25,42 @@ def memory_page_in(params: dict, kernel=None) -> dict:
         else:
             print("Memory: score_history.jsonl not found.")
     elif source == "experiences":
+        tag_filter = set(t.lower() for t in params.get("tags", []))
         exp_dir = os.path.join(boros_dir, "memory", "experiences")
         if os.path.isdir(exp_dir):
-            for f in sorted(glob.glob(os.path.join(exp_dir, "*.json")), key=os.path.getmtime, reverse=True)[:limit]:
+            candidates = sorted(glob.glob(os.path.join(exp_dir, "*.json")), key=os.path.getmtime, reverse=True)
+            for f in candidates:
+                if len(data) >= limit:
+                    break
                 try:
                     with open(f) as fh:
-                        data.append(json.load(fh))
+                        entry = json.load(fh)
+                    if tag_filter:
+                        entry_tags = set(t.lower() for t in entry.get("tags", []))
+                        if not tag_filter.intersection(entry_tags):
+                            continue
+                    data.append(entry)
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"Memory: Error reading experience file {f}: {e}")
     elif source == "evolution_records":
+        skill_filter = params.get("skill", "").lower().strip()
+        outcome_filter = params.get("outcome", "").lower().strip()
         rec_dir = os.path.join(boros_dir, "memory", "evolution_records")
         if os.path.isdir(rec_dir):
-            for f in sorted(glob.glob(os.path.join(rec_dir, "*.json")), key=os.path.getmtime, reverse=True)[:limit]:
+            candidates = sorted(glob.glob(os.path.join(rec_dir, "hyp-cycle*.json")), key=os.path.getmtime, reverse=True)
+            for f in candidates:
+                if len(data) >= limit:
+                    break
                 try:
                     with open(f) as fh:
-                        data.append(json.load(fh))
+                        record = json.load(fh)
+                    if skill_filter:
+                        ts = record.get("target_skill", "").lower()
+                        if skill_filter not in ts and ts not in skill_filter:
+                            continue
+                    if outcome_filter and record.get("actual_outcome", "").lower() != outcome_filter:
+                        continue
+                    data.append(record)
                 except (json.JSONDecodeError, OSError) as e:
                     print(f"Memory: Error reading evolution record {f}: {e}")
     elif source == "sessions":

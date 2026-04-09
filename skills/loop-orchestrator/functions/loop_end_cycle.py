@@ -59,6 +59,10 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             elif after_val is not None:
                 outcome = "baseline"
 
+            score_delta = None
+            if before_val is not None and after_val is not None:
+                score_delta = round(after_val - before_val, 4)
+
             archive_entry = {
                 "id": hypothesis.get("id", f"hyp-{uuid.uuid4().hex[:8]}"),
                 "cycle": cycle,
@@ -66,6 +70,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
                 "rationale": hypothesis.get("rationale", ""),
                 "expected_improvement": hypothesis.get("expected_improvement", ""),
                 "actual_outcome": outcome,
+                "score_delta": score_delta,
                 "score_before": score_before,
                 "score_after": score_after,
                 "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
