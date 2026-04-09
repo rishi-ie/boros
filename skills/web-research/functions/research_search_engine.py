@@ -1,6 +1,7 @@
 import urllib.request
 import urllib.parse
 import re
+from ._extract_knowledge_from_results import _extract_knowledge_from_results
 
 def research_search_engine(params: dict, kernel=None) -> dict:
     """Search the web using DuckDuckGo. Returns up to 5 results with title, link, snippet."""
@@ -20,7 +21,8 @@ def research_search_engine(params: dict, kernel=None) -> dict:
                     "link":    r.get("href", "")
                 })
         if results:
-            return {"status": "ok", "query": query, "results": results, "source": "ddgs"}
+            extracted_knowledge = _extract_knowledge_from_results(results, query)
+            return {"status": "ok", "query": query, "results": results, "extracted_knowledge": extracted_knowledge, "source": "ddgs"}
     except ImportError:
         pass
     except Exception:
