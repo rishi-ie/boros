@@ -36,6 +36,23 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
 
     wm_version = _get_world_model_version(boros_dir)
 
+    def _rotate_score_history(score_hist):
+        """FIX-13: Keep only the last MAX_HISTORY_LINES entries."""
+        MAX_HISTORY_LINES = 500
+        if not os.path.exists(score_hist):
+            return
+        try:
+            with open(score_hist, "r") as f:
+                lines = f.readlines()
+            if len(lines) > MAX_HISTORY_LINES:
+                archive = score_hist + ".archive"
+                with open(archive, "a") as f:
+                    f.writelines(lines[:-MAX_HISTORY_LINES])
+                with open(score_hist, "w") as f:
+                    f.writelines(lines[-MAX_HISTORY_LINES:])
+        except Exception as e:
+            print(f"[eval_read_scores] WARNING: could not rotate score history: {e}")
+
     def _append_to_history(result_data):
         score_hist = os.path.join(boros_dir, "memory", "score_history.jsonl")
         os.makedirs(os.path.dirname(score_hist), exist_ok=True)
@@ -54,6 +71,7 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
         entry["world_model_version"] = wm_version  # marks which world model generated this score
         with open(score_hist, "a") as f:
             f.write(json.dumps(entry) + "\n")
+        _rotate_score_history(score_hist)
 
     def _copy_to_evals_scores(result_data):
         """Mirror result to evals/scores/ so agent_loop.py prompt injection works."""
@@ -70,6 +88,18 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
     if eval_id:
         # Strip prefixes to handle LLM hallucinating req- vs eval- prefixes
         raw_id = eval_id.replace("req-", "").replace("eval-", "")
+
+        # Also load the actual pending request ID from session (in case LLM hallucinated the ID)
+        fallback_raw_id = None
+        try:
+            pending_path = os.path.join(boros_dir, "session", "pending_eval.json")
+            if os.path.exists(pending_path):
+                with open(pending_path) as f:
+                    pending = json.load(f)
+                fallback_raw_id = pending.get("request_id", "").replace("req-", "").replace("eval-", "")
+        except Exception:
+            pass
+
         # Read specific eval (wait up to 5 minutes)
         for attempt in range(60):
             for rf in glob.glob(os.path.join(results_dir, "*.json")):
@@ -78,9 +108,16 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
                         result = json.load(f)
                         req_raw = result.get("request_id", "").replace("req-", "").replace("eval-", "")
                         ev_raw = result.get("eval_id", "").replace("req-", "").replace("eval-", "")
-                        if raw_id == req_raw or raw_id == ev_raw:
+                        if raw_id == req_raw or raw_id == ev_raw or (fallback_raw_id and (fallback_raw_id == req_raw or fallback_raw_id == ev_raw)):
                             _append_to_history(result)
                             _copy_to_evals_scores(result)
+                            # Clean up pending_eval.json once found
+                            try:
+                                pending_path = os.path.join(boros_dir, "session", "pending_eval.json")
+                                if os.path.exists(pending_path):
+                                    os.remove(pending_path)
+                            except Exception:
+                                pass
                             return {"status": "ok", "scores": result.get("scores", {}), "composite": result.get("composite", 0), "result": result}
                 except Exception:
                     pass

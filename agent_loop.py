@@ -147,6 +147,35 @@ class AgentLoop:
             except Exception:
                 pass
 
+        # 6a. FIX-10: Surface Failures in System Prompt
+        try:
+            import importlib
+            ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+            
+            regressions = ledger.query_ledger(str(self.boros_root), outcome="regressed", limit=10)
+            if regressions:
+                reg_lines = ["## REGRESSION WARNINGS — DO NOT REPEAT THESE"]
+                for r in regressions:
+                    delta = r.get('delta')
+                    delta_str = f"{delta:+.3f}" if isinstance(delta, (int, float)) else "unknown"
+                    appr = str(r.get('approach', ''))[:80].replace('\n', ' ')
+                    reg_lines.append(f"- Cycle {r.get('cycle')}: Changed {r.get('target_file')} "
+                                     f"({appr}...) → REGRESSED {delta_str}")
+                parts.append("\n".join(reg_lines))
+
+            blocked = []
+            for r in ledger.query_ledger(str(self.boros_root), limit=50):
+                if r.get("outcome") in ("regressed", "neutral"):
+                    tf = r.get("target_file")
+                    if tf: blocked.append(tf)
+            if blocked:
+                b_lines = ["## BLOCKED FILES (recently failed, try different approach)"]
+                for f in set(blocked):
+                    b_lines.append(f"- {f}")
+                parts.append("\n".join(b_lines))
+        except Exception:
+            pass
+
         # 6b. Active hypothesis (Task Binding)
         hyp_file = self.boros_root / "session" / "hypothesis.json"
         if hyp_file.exists():
@@ -320,12 +349,15 @@ class AgentLoop:
 
         tool_call_count = 0
         cycle_start = time.time()
+        token_budget = self.kernel.config.get("max_tokens_per_cycle", 500000)
+        tokens_used = 0
 
         self.log("[CYCLE] Starting evolution cycle...")
         status = "completed"
         empty_turns = 0
 
         try:
+            executed_tools = set()
             while tool_call_count < self.max_tool_calls:
                 # Time limit check
                 elapsed_min = (time.time() - cycle_start) / 60
@@ -353,9 +385,18 @@ class AgentLoop:
                     if block.get("type") == "text" and block.get("text"):
                         self.log(f"[BOROS] {block['text'][:800]}")
 
-                # Log usage
+                # Log usage and enforce FIX-19 token budget
                 if usage:
-                    self.log(f"[TOKENS] in={usage.get('input_tokens', '?')} out={usage.get('output_tokens', '?')}")
+                    in_tok = usage.get('input_tokens', 0)
+                    out_tok = usage.get('output_tokens', 0)
+                    tokens_used += (in_tok + out_tok)
+                    self.log(f"[TOKENS] in={in_tok} out={out_tok} | total={tokens_used}/{token_budget}")
+
+                if tokens_used > token_budget:
+                    self.log(f"[CYCLE] Token budget ({token_budget}) exceeded. Soft-terminating cycle.")
+                    status = "budget_exceeded"
+                    self._ensure_cycle_committed()
+                    break
 
                 # Append assistant response
                 messages.append({"role": "assistant", "content": content})
@@ -373,6 +414,21 @@ class AgentLoop:
                         name = block["name"]
                         inp = block.get("input", {})
                         tid = block["id"]
+                        
+                        # FIX-17: Deduplicate identical non-polling tool calls
+                        sig = (name, json.dumps(inp, sort_keys=True))
+                        is_polling = name in ("eval_read_scores", "tool_terminal_input", "router_get_budget")
+                        is_duplicate = (sig in executed_tools) and not is_polling
+                        
+                        if is_duplicate:
+                            self.log(f"[STATUS] ⚠️ Blocked duplicate tool call: {name}")
+                            result = {"status": "error", "message": "Duplicate tool call detected. You already executed this exact command this cycle. Try something else to avoid looping."}
+                            result_str = json.dumps(result)
+                            tool_results.append({"type": "tool_result", "tool_use_id": tid, "content": result_str})
+                            continue
+
+                        if not is_polling:
+                            executed_tools.add(sig)
 
                         _tool_desc = self._describe_tool_call(name, inp)
                         if _tool_desc:
@@ -471,6 +527,9 @@ class AgentLoop:
         messages = [{"role": "user", "content": self._execution_prompt(active_task)}]
         tool_call_count = 0
         cycle_start = time.time()
+        token_budget = self.kernel.config.get("max_tokens_per_cycle", 500000)
+        tokens_used = 0
+        
         self.log("[CYCLE] Starting execution cycle...")
         status = "completed"
         empty_turns = 0
@@ -496,6 +555,16 @@ class AgentLoop:
                 for block in content:
                     if block.get("type") == "text" and block.get("text"):
                         self.log(f"[BOROS EXECUTION] {block['text'][:800]}")
+
+                usage = response.get("usage", {})
+                if usage:
+                    tokens_used += usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
+                    self.log(f"[TOKENS] total={tokens_used}/{token_budget}")
+                
+                if tokens_used > token_budget:
+                    self.log(f"[CYCLE] Token budget ({token_budget}) exceeded. Terminating.")
+                    status = "budget_exceeded"
+                    break
 
                 messages.append({"role": "assistant", "content": content})
 

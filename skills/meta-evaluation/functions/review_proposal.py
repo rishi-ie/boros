@@ -69,10 +69,11 @@ def review_proposal(params: dict, kernel=None) -> dict:
             reason = f"Meta-eval LLM call failed ({e}). Rejecting for safety — will retry next cycle."
             confidence = 0.1
     else:
-        # Rule-based fallback
-        verdict = "apply"
-        reason = "No meta-eval LLM configured. Rule-based approval."
-        confidence = 0.5
+        # FIX-09: Rule-based fallback — default to REJECT when no LLM is available.
+        # The quality gate must not silently disappear.
+        verdict = "reject"
+        reason = "No meta-eval LLM available. Cannot verify proposal quality. Rejecting by default."
+        confidence = 0.3
         if not diff or len(diff.strip()) < 10:
             verdict = "reject"
             reason = "Empty or trivial diff."

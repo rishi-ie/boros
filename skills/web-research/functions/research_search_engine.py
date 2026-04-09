@@ -24,9 +24,9 @@ def research_search_engine(params: dict, kernel=None) -> dict:
             extracted_knowledge = _extract_knowledge_from_results(results, query)
             return {"status": "ok", "query": query, "results": results, "extracted_knowledge": extracted_knowledge, "source": "ddgs"}
     except ImportError:
-        pass
-    except Exception:
-        pass
+        print("duckduckgo_search package not found, falling back to DDG Lite.")
+    except Exception as e:
+        print(f"Error with duckduckgo_search: {e}, falling back to DDG Lite.")
 
     # Strategy 2: DuckDuckGo Lite endpoint (simple table HTML, no JS required)
     try:

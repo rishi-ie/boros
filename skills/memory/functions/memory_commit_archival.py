@@ -11,6 +11,23 @@ def memory_commit_archival(params: dict, kernel=None) -> dict:
     if not content:
         return {"status": "error", "message": "content required"}
 
+    if entry_type in ["lesson", "observation"]:
+        required_phrases = ["Context:", "Action:", "Outcome:"]
+        if not all(phrase in content for phrase in required_phrases):
+            return {"status": "error", "message": f"For entry_type '{entry_type}', content must explicitly include all of: {required_phrases}. Received: '{content}'"}
+            
+        # FIX-16: Reject empty experiences
+        if len(content.strip()) < 100:
+            return {"status": "error", "message": "Experience content is too short to be meaningful. Write at least 100 characters detailing the context, action, and outcome."}
+            
+        # Ensure it's not just an empty template
+        for phrase in required_phrases:
+            parts = content.split(phrase)
+            if len(parts) > 1:
+                following_text = parts[1].split("\n")[0].strip()
+                if not following_text and len(parts[1].strip()) < 10:
+                    return {"status": "error", "message": f"Did not provide meaningful details after '{phrase}'. Do not submit blank templates."}
+
     entry_id = f"exp-{uuid.uuid4().hex[:8]}"
     timestamp = datetime.datetime.utcnow().isoformat() + "Z"
     tags_str = json.dumps(tags)

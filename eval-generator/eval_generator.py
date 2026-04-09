@@ -81,6 +81,7 @@ class EvalGenerator:
     # Request polling & expiry
     # ─────────────────────────────────────────────────────────
     def _poll_requests(self):
+        self._write_ready_file()  # FIX-18: Update heartbeat timestamp
         if not os.path.isdir(self.requests_dir):
             return
         for req_file in os.listdir(self.requests_dir):
@@ -549,8 +550,18 @@ class EvalGenerator:
             def _blended(s):
                 return s["outcome_score"] * s["outcome_weight"] + s["quality_score"] * s["quality_weight"]
 
-            total_score = sum(_blended(s) for s in scores.values())
-            composite_score = round(total_score / len(categories), 3) if categories else 0.0
+            # FIX-15: Difficulty scaling.
+            absolute_scores = {k: round(_blended(v), 3) for k, v in scores.items()}
+            
+            total_difficulty_weighted = 0.0
+            total_weights = 0.0
+            for k, v in scores.items():
+                difficulty = self._get_milestone_data(k).get("difficulty", 5)
+                weight = difficulty / 10.0
+                total_difficulty_weighted += absolute_scores[k] * weight
+                total_weights += weight
+                
+            composite_score = round(total_difficulty_weighted / total_weights, 3) if total_weights > 0 else 0.0
 
             # ─── Write result to shared/results ───
             result = {
@@ -558,7 +569,7 @@ class EvalGenerator:
                 "eval_id": eval_id,
                 "timestamp": datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z"),
                 "cycle": cycle,
-                "scores": {k: round(_blended(v), 3) for k, v in scores.items()},
+                "scores": absolute_scores,
                 "composite": composite_score,
                 "difficulty_level": {k: self._get_milestone_data(k)["difficulty"] for k in categories},
                 "scoring_breakdown": scores

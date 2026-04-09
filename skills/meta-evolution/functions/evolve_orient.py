@@ -174,6 +174,19 @@ def evolve_orient(params: dict, kernel=None) -> dict:
     if not fresh_targets:
         fresh_targets = skill_targets  # all were recent, use all
 
+    # FIX-06: Filter out blocked files (anti-brute-force)
+    try:
+        import importlib
+        ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+        unblocked = []
+        for t in fresh_targets:
+            if not ledger.check_brute_force(boros_dir, t["file"]):
+                unblocked.append(t)
+        if unblocked:
+            fresh_targets = unblocked
+    except Exception:
+        pass
+
     # Sort by priority score
     fresh_targets.sort(key=lambda x: x["priority_score"])
 
@@ -192,6 +205,21 @@ def evolve_orient(params: dict, kernel=None) -> dict:
     if weakest_score == float("inf"):
         weakest_score = 999.0
 
+    # FIX-08: Activate Knowledge Graph (query history for candidates)
+    kg_data = []
+    if kernel and "memory_kg_query" in kernel.registry and related_skills:
+        try:
+            for rs in related_skills:
+                res = kernel.registry["memory_kg_query"]({
+                    "subject": rs, 
+                    "predicate": "was_modified", 
+                    "include_history": True
+                }, kernel)
+                if res and res.get("status") == "ok":
+                    kg_data.extend(res.get("results", []))
+        except Exception as e:
+            print(f"[evolve_orient] WARNING: KG query failed: {e}")
+
     return {
         "status": "ok",
         "weakest_category": weakest_category,
@@ -201,11 +229,13 @@ def evolve_orient(params: dict, kernel=None) -> dict:
         "latest_scores": latest_scores,
         "history_entries": len(history),
         "candidates": candidates[:10],
+        "kg_history": kg_data,
         "total_skill_files": len(skill_targets),
         "recommendation": (
             f"Weakest category: '{weakest_category}' (score: {raw_weakest_score:.3f}). "
             f"Related skills to target: {related_skills}. "
             f"Top candidate: {candidates[0]['file'] if candidates else 'none'}. "
-            f"Targeting uses UCB1 exploration — prefers related, understubbed, rarely-targeted files."
+            f"Targeting uses UCB1 exploration — prefers related, understubbed, rarely-targeted files. "
+            f"Blocked files were filtered out automatically."
         )
     }

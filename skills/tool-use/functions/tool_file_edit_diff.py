@@ -1,5 +1,6 @@
 import os
 import py_compile
+from ._internal.path_guard import is_path_protected
 
 def tool_file_edit_diff(params: dict, kernel=None) -> dict:
     target_file = params.get("target_file")
@@ -8,6 +9,12 @@ def tool_file_edit_diff(params: dict, kernel=None) -> dict:
     if not target_file: return {"status": "error", "message": "target_file required"}
     if not os.path.exists(target_file): return {"status": "error", "message": "file not found"}
     
+    # FIX-01: Enforce path protection
+    if kernel:
+        protected, reason = is_path_protected(target_file, str(kernel.boros_root))
+        if protected:
+            return {"status": "error", "message": f"BLOCKED: {reason}"}
+
     try:
         with open(target_file, "r") as f:
             original_content = f.read()

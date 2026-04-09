@@ -1,5 +1,6 @@
 import os
 import py_compile
+from ._internal.path_guard import is_path_protected
 
 def tool_file_write(params: dict, kernel=None) -> dict:
     """Write content to a file, creating it if it doesn't exist.
@@ -16,6 +17,13 @@ def tool_file_write(params: dict, kernel=None) -> dict:
         full_path = os.path.join(str(kernel.boros_root), path)
     else:
         full_path = path
+
+    # FIX-01: Enforce path protection
+    if kernel:
+        protected, reason = is_path_protected(full_path, str(kernel.boros_root))
+        if protected:
+            return {"status": "error", "message": f"BLOCKED: {reason}"}
+
 
     try:
         os.makedirs(os.path.dirname(full_path), exist_ok=True)

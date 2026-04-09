@@ -61,4 +61,22 @@ def forge_snapshot(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass  # non-fatal — crash recovery just won't have the id
 
+    # FIX-14: Enforce snapshot retention
+    snapshots_dir = os.path.join(boros_dir, "snapshots")
+    def _enforce_retention(snapshots_dir, keep_last=20):
+        if not os.path.isdir(snapshots_dir):
+            return
+        try:
+            dirs = sorted(
+                [d for d in os.listdir(snapshots_dir) if d.startswith("snap-")],
+                key=lambda d: os.path.getmtime(os.path.join(snapshots_dir, d)),
+                reverse=True
+            )
+            for old in dirs[keep_last:]:
+                shutil.rmtree(os.path.join(snapshots_dir, old), ignore_errors=True)
+        except Exception as e:
+            print(f"[forge_snapshot] Snapshot cleanup failed: {e}")
+            
+    _enforce_retention(snapshots_dir)
+
     return {"status": "ok", "snapshot_id": snapshot_id, "files_snapshotted": len(files_copied)}

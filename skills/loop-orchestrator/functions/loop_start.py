@@ -9,8 +9,9 @@ def loop_start(params: dict, kernel=None) -> dict:
     session_state_file = os.path.join(session_dir, "loop_state.json")
     cycle_file = os.path.join(session_dir, "current_cycle.json")
 
-    # ── Crash recovery: detect and clean up unfinished previous cycle ──
+    # ── FIX-02: Crash-safe recovery ──────────────────────────────────────
     crashed = False
+    crash_details = {}
     if os.path.exists(session_state_file):
         try:
             with open(session_state_file) as sf:
@@ -19,23 +20,68 @@ def loop_start(params: dict, kernel=None) -> dict:
             # If stage is not None and not END, the previous cycle never completed
             if prev_stage and prev_stage not in (None, "END"):
                 crashed = True
-                print(f"[loop_start] WARNING: Previous cycle crashed in stage '{prev_stage}'. Cleaning up and starting fresh.")
-                # Attempt rollback if a snapshot was active
-                if kernel and "forge_rollback" in kernel.registry:
-                    target_file = os.path.join(session_dir, "evolution_target.json")
-                    if os.path.exists(target_file):
+                crash_details["crashed_stage"] = prev_stage
+                crash_details["crashed_cycle"] = prev_state.get("cycle", "unknown")
+                print(f"[loop_start] WARNING: Previous cycle crashed in stage '{prev_stage}'. Running aggressive recovery.")
+
+                # 1. Always try to rollback from evolution_target snapshot
+                target_file = os.path.join(session_dir, "evolution_target.json")
+                if os.path.exists(target_file):
+                    try:
+                        with open(target_file) as f:
+                            tgt = json.load(f)
+                        target = tgt.get("target") or tgt.get("target_skill")
+                        snapshot_id = tgt.get("snapshot_id")
+                        if target and snapshot_id and kernel and "forge_rollback" in kernel.registry:
+                            result = kernel.registry["forge_rollback"](
+                                {"target": target, "snapshot_id": snapshot_id}, kernel
+                            )
+                            crash_details["rollback_target"] = target
+                            crash_details["rollback_snapshot"] = snapshot_id
+                            crash_details["rollback_result"] = result.get("status", "unknown")
+                            print(f"[CRASH RECOVERY] Rolled back {target} to {snapshot_id}: {result.get('status')}")
+                    except (json.JSONDecodeError, OSError) as e:
+                        crash_details["rollback_error"] = str(e)
+                        print(f"[CRASH RECOVERY] Rollback failed: {e}")
+
+                # 2. Clean up ALL stale session files
+                stale_files = ["hypothesis.json", "evolution_target.json", "review_feedback.json",
+                               "pending_eval.json"]
+                for stale in stale_files:
+                    path = os.path.join(session_dir, stale)
+                    if os.path.exists(path):
                         try:
-                            with open(target_file) as f:
-                                tgt = json.load(f)
-                            target = tgt.get("target")
-                            snapshot_id = tgt.get("snapshot_id")
-                            if target and snapshot_id:
-                                kernel.registry["forge_rollback"](
-                                    {"target": target, "snapshot_id": snapshot_id}, kernel
-                                )
-                                print(f"[loop_start] Auto-rollback executed for crashed cycle: {target}")
-                        except (json.JSONDecodeError, OSError):
+                            os.remove(path)
+                        except OSError:
                             pass
+
+                # Also clean proposals directory
+                proposals_dir = os.path.join(session_dir, "proposals")
+                if os.path.isdir(proposals_dir):
+                    for item in os.listdir(proposals_dir):
+                        try:
+                            os.remove(os.path.join(proposals_dir, item))
+                        except OSError:
+                            pass
+
+                # 3. Write crash record to evolution_records for learning
+                try:
+                    crash_record = {
+                        "type": "crash_recovery",
+                        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                        "crashed_stage": prev_stage,
+                        "crashed_cycle": prev_state.get("cycle"),
+                        "snapshot_rolled_back": crash_details.get("rollback_snapshot"),
+                        "target_skill": crash_details.get("rollback_target"),
+                    }
+                    records_dir = os.path.join(boros_dir, "memory", "evolution_records")
+                    os.makedirs(records_dir, exist_ok=True)
+                    crash_filename = f"crash-{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+                    with open(os.path.join(records_dir, crash_filename), "w") as f:
+                        json.dump(crash_record, f, indent=2)
+                except Exception as e:
+                    print(f"[CRASH RECOVERY] Failed to write crash record: {e}")
+
         except (json.JSONDecodeError, OSError):
             pass
 
@@ -76,4 +122,5 @@ def loop_start(params: dict, kernel=None) -> dict:
     result = {"status": "ok", "state": state}
     if crashed:
         result["recovered_from_crash"] = True
+        result["crash_details"] = crash_details
     return result

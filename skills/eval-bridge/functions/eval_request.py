@@ -14,13 +14,23 @@ def eval_request(params: dict, kernel=None) -> dict:
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
     }
 
-    # Health check: warn if eval-generator isn't running
+    # FIX-18: Health check with heartbeat (warn if eval-generator isn't running or is silent)
     ready_file = os.path.join(boros_dir, "eval-generator", "shared", ".ready")
-    if not os.path.exists(ready_file):
+    is_alive = False
+    import time
+    if os.path.exists(ready_file):
+        try:
+            mtime = os.path.getmtime(ready_file)
+            if time.time() - mtime < 300: # 5 minutes heartbeat
+                is_alive = True
+        except OSError:
+            pass
+
+    if not is_alive:
         return {
             "status": "error",
             "message": (
-                "Eval-generator is not running. Start it first:\n"
+                "Eval-generator is not responding (no heartbeat in 5 minutes). Start or restart it first:\n"
                 "  python eval-generator/eval_generator.py\n"
                 "Or use start.py to launch both processes together:\n"
                 "  python start.py"
@@ -33,4 +43,10 @@ def eval_request(params: dict, kernel=None) -> dict:
     with open(os.path.join(requests_dir, f"{request_id}.json"), "w") as f:
         json.dump(request, f, indent=2)
 
-    return {"status": "ok", "request_id": request_id, "message": "Evaluation request submitted to sandbox."}
+    # Track pending request in session so eval_read_scores can find it even if LLM hallucinates the ID
+    session_dir = os.path.join(boros_dir, "session")
+    os.makedirs(session_dir, exist_ok=True)
+    with open(os.path.join(session_dir, "pending_eval.json"), "w") as f:
+        json.dump({"request_id": request_id, "timestamp": request["timestamp"]}, f)
+
+    return {"status": "ok", "request_id": request_id, "message": f"Evaluation request submitted. Use eval_id='{request_id}' when calling eval_read_scores."}

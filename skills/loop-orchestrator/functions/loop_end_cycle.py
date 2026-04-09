@@ -1,6 +1,15 @@
 
 import os, json, datetime, uuid
+
+
 def loop_end_cycle(params: dict, kernel=None) -> dict:
+    """End the current evolution cycle with full outcome recording.
+    
+    This function is now the integration point for:
+    - FIX-05: Evolution ledger recording (change → outcome tracking)
+    - FIX-07: Automatic regression rollback (no LLM decision needed)
+    - FIX-08: Knowledge graph triple writing
+    """
     boros_dir = str(kernel.boros_root) if kernel else "boros"
 
     state_file = os.path.join(boros_dir, "session", "loop_state.json")
@@ -15,67 +24,186 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     else:
         cycle = 0
 
-    # ── Archive hypothesis with outcome before clearing session ──────────────
+    # ── Read hypothesis ──────────────────────────────────────────
     hyp_file = os.path.join(boros_dir, "session", "hypothesis.json")
-    hypothesis_archived = False
+    hypothesis = {}
     if os.path.exists(hyp_file):
         try:
             with open(hyp_file) as f:
                 hypothesis = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
 
-            # Read score history to compute before/after delta
-            score_hist_path = os.path.join(boros_dir, "memory", "score_history.jsonl")
-            score_before, score_after, outcome = {}, {}, "unknown"
-            if os.path.exists(score_hist_path):
-                with open(score_hist_path) as f:
-                    lines = [ln for ln in f if ln.strip()]
-                entries = [json.loads(l) for l in lines]
-                # Find the two most recent entries that have scores
-                scored = [e for e in entries if e.get("scores")]
-                if len(scored) >= 2:
-                    score_before = scored[-2].get("scores", {})
-                    score_after  = scored[-1].get("scores", {})
-                elif len(scored) == 1:
-                    score_after = scored[-1].get("scores", {})
+    # ── Read evolution target ────────────────────────────────────
+    target_data = {}
+    target_file_path = os.path.join(boros_dir, "session", "evolution_target.json")
+    if os.path.exists(target_file_path):
+        try:
+            with open(target_file_path) as f:
+                target_data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
 
-            # Determine outcome: check the target category
-            target_cat = hypothesis.get("target_skill", "")
-            # Try to find the category that matches the target skill
-            before_val = None
-            after_val  = None
-            for cat, val in score_after.items():
-                if cat in target_cat or target_cat in cat:
-                    after_val = val
-                    before_val = score_before.get(cat)
-                    break
-            if before_val is not None and after_val is not None:
-                delta = after_val - before_val
-                if delta > 0.02:
-                    outcome = "improved"
-                elif delta < -0.02:
-                    outcome = "regressed"
-                else:
-                    outcome = "neutral"
-            elif after_val is not None:
-                outcome = "baseline"
+    target_skill = target_data.get("target_skill", hypothesis.get("target_skill", ""))
+    snapshot_id = target_data.get("snapshot_id", "")
+    target_file = target_data.get("target_file", "")
 
-            score_delta = None
-            if before_val is not None and after_val is not None:
-                score_delta = round(after_val - before_val, 4)
+    # ── Compute score delta ──────────────────────────────────────
+    score_hist_path = os.path.join(boros_dir, "memory", "score_history.jsonl")
+    score_before, score_after, outcome = {}, {}, "unknown"
+    delta = None
+    target_cat = target_skill  # category usually matches skill name
 
+    if os.path.exists(score_hist_path):
+        try:
+            with open(score_hist_path) as f:
+                lines = [ln for ln in f if ln.strip()]
+            entries = [json.loads(l) for l in lines]
+            scored = [e for e in entries if e.get("scores")]
+            if len(scored) >= 2:
+                score_before = scored[-2].get("scores", {})
+                score_after = scored[-1].get("scores", {})
+            elif len(scored) == 1:
+                score_after = scored[-1].get("scores", {})
+        except Exception:
+            pass
+
+    # Determine outcome for the target category
+    before_val = None
+    after_val = None
+    for cat, val in score_after.items():
+        if cat in target_cat or target_cat in cat:
+            after_val = val
+            before_val = score_before.get(cat)
+            target_cat = cat  # resolve to exact category name
+            break
+
+    if before_val is not None and after_val is not None:
+        delta = round(after_val - before_val, 4)
+        if delta > 0.02:
+            outcome = "improved"
+        elif delta < -0.02:
+            outcome = "regressed"
+        else:
+            outcome = "neutral"
+    elif after_val is not None:
+        outcome = "baseline"
+
+    # ── FIX-07: Automatic regression rollback ────────────────────
+    auto_rollback = None
+    if outcome == "regressed" and snapshot_id and target_skill:
+        if kernel and "forge_rollback" in kernel.registry:
+            try:
+                rollback_result = kernel.registry["forge_rollback"](
+                    {"snapshot_id": snapshot_id, "target": target_skill}, kernel
+                )
+                auto_rollback = {
+                    "snapshot_id": snapshot_id,
+                    "target_skill": target_skill,
+                    "result": rollback_result.get("status", "unknown")
+                }
+                print(f"[AUTO-ROLLBACK] {target_skill} regressed ({delta:+.4f}). "
+                      f"Restored snapshot {snapshot_id}.")
+            except Exception as e:
+                auto_rollback = {"error": str(e)}
+                print(f"[AUTO-ROLLBACK] Failed for {target_skill}: {e}")
+
+    # ── FIX-05: Write evolution ledger entry ──────────────────────
+    # Read proposal info if available
+    proposal_id = ""
+    approach = hypothesis.get("rationale", params.get("description", ""))
+    review_verdict = ""
+    proposals_dir = os.path.join(boros_dir, "session", "proposals")
+    if os.path.isdir(proposals_dir):
+        for fname in os.listdir(proposals_dir):
+            if fname.endswith(".json"):
+                try:
+                    with open(os.path.join(proposals_dir, fname)) as f:
+                        prop = json.load(f)
+                    proposal_id = prop.get("id", "")
+                    if not approach:
+                        approach = prop.get("description", "")
+                    if not target_file:
+                        target_file = prop.get("target_file", "")
+                    break  # Use first proposal found
+                except Exception:
+                    pass
+
+    # Check for review verdict
+    review_file = os.path.join(boros_dir, "memory", "evolution_records", f"review-{proposal_id}.json")
+    if os.path.exists(review_file):
+        try:
+            with open(review_file) as f:
+                review_data = json.load(f)
+            review_verdict = review_data.get("verdict", "")
+        except Exception:
+            pass
+
+    try:
+        # Import ledger from meta-evolution skill's _internal
+        import importlib
+        ledger_module = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+        ledger_entry = {
+            "cycle": cycle,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "target_skill": target_skill,
+            "target_file": target_file,
+            "category": target_cat,
+            "approach": approach[:500] if approach else "",
+            "proposal_id": proposal_id,
+            "snapshot_id": snapshot_id,
+            "score_before": score_before,
+            "score_after": score_after,
+            "delta": delta,
+            "outcome": outcome,
+            "review_verdict": review_verdict,
+            "hypothesis_rationale": hypothesis.get("rationale", "")[:500],
+            "auto_rollback": auto_rollback,
+        }
+        ledger_module.record_attempt(boros_dir, ledger_entry)
+    except Exception as e:
+        print(f"[loop_end_cycle] WARNING: Failed to write evolution ledger: {e}")
+
+    # ── FIX-08: Write Knowledge Graph triples ────────────────────
+    if kernel and "memory_kg_write" in kernel.registry:
+        try:
+            kg = kernel.registry["memory_kg_write"]
+
+            # Record scores
+            for cat, score in score_after.items():
+                kg({"subject": cat, "predicate": "has_score",
+                    "object": str(score), "cycle": cycle}, kernel)
+
+            # Record what was modified
+            if target_skill:
+                kg({"subject": target_skill, "predicate": "was_modified",
+                    "object": approach[:200] if approach else "unknown", "cycle": cycle}, kernel)
+
+            # Record causal link
+            if target_skill and target_cat and delta is not None:
+                kg({"subject": target_skill, "predicate": "caused_delta_in",
+                    "object": f"{target_cat}:{delta:+.4f}", "cycle": cycle,
+                    "metadata": {"outcome": outcome}}, kernel)
+        except Exception as e:
+            print(f"[loop_end_cycle] WARNING: KG write failed: {e}")
+
+    # ── Archive hypothesis with full outcome data ────────────────
+    hypothesis_archived = False
+    if hypothesis:
+        try:
             archive_entry = {
                 "id": hypothesis.get("id", f"hyp-{uuid.uuid4().hex[:8]}"),
                 "cycle": cycle,
-                "target_skill": hypothesis.get("target_skill", ""),
+                "target_skill": target_skill,
                 "rationale": hypothesis.get("rationale", ""),
                 "expected_improvement": hypothesis.get("expected_improvement", ""),
                 "actual_outcome": outcome,
-                "score_delta": score_delta,
+                "score_delta": delta,
                 "score_before": score_before,
                 "score_after": score_after,
+                "auto_rollback": auto_rollback,
                 "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
             }
-
             records_dir = os.path.join(boros_dir, "memory", "evolution_records")
             os.makedirs(records_dir, exist_ok=True)
             archive_path = os.path.join(records_dir, f"hyp-cycle{cycle}.json")
@@ -85,23 +213,16 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: hypothesis archival failed: {e}")
 
-    # Auto-update high-water marks from latest scores
+    # ── Auto-update high-water marks from latest scores ──────────
     hw_updated = {}
-    score_hist = os.path.join(boros_dir, "memory", "score_history.jsonl")
-    if os.path.exists(score_hist):
+    if score_after and kernel and "eval_update_high_water" in kernel.registry:
         try:
-            with open(score_hist, "r") as f:
-                lines = [ln for ln in f if ln.strip()]
-            if lines:
-                latest = json.loads(lines[-1])
-                latest_scores = latest.get("scores", {})
-                if latest_scores and kernel and "eval_update_high_water" in kernel.registry:
-                    result = kernel.registry["eval_update_high_water"]({"scores": latest_scores}, kernel)
-                    hw_updated = result.get("updated_categories", {})
+            result = kernel.registry["eval_update_high_water"]({"scores": score_after}, kernel)
+            hw_updated = result.get("updated_categories", {})
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: high-water mark update failed: {e}")
 
-    # Check milestone advancement after high-water marks are updated
+    # ── Check milestone advancement ──────────────────────────────
     if kernel and "eval_check_milestone" in kernel.registry:
         try:
             milestone_result = kernel.registry["eval_check_milestone"]({}, kernel)
@@ -110,27 +231,41 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: milestone check failed: {e}")
 
-    # Clean up session artifacts — hypothesis.json is intentionally NOT kept
+    # ── Clean up session artifacts ───────────────────────────────
     session_dir = os.path.join(boros_dir, "session")
-    keep = {"loop_state.json", "current_cycle.json", "evolution_target.json"}
+    keep = {"loop_state.json", "current_cycle.json"}
     if os.path.isdir(session_dir):
         for item in os.listdir(session_dir):
-            if item not in keep and not os.path.isdir(os.path.join(session_dir, item)):
+            item_path = os.path.join(session_dir, item)
+            if item not in keep and not os.path.isdir(item_path):
                 try:
-                    os.remove(os.path.join(session_dir, item))
+                    os.remove(item_path)
+                except OSError:
+                    pass
+        # Clean proposals directory
+        proposals_path = os.path.join(session_dir, "proposals")
+        if os.path.isdir(proposals_path):
+            for item in os.listdir(proposals_path):
+                try:
+                    os.remove(os.path.join(proposals_path, item))
                 except OSError:
                     pass
 
-    # Log
+    # ── Log ──────────────────────────────────────────────────────
     log_file = os.path.join(boros_dir, "logs", "cycles.log")
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
     with open(log_file, "a") as f:
-        f.write(f"Cycle {cycle} ended at {datetime.datetime.utcnow().isoformat()}Z\n")
+        rollback_note = " [AUTO-ROLLED-BACK]" if auto_rollback else ""
+        f.write(f"Cycle {cycle} ended at {datetime.datetime.utcnow().isoformat()}Z "
+                f"| outcome={outcome} delta={delta}{rollback_note}\n")
 
     return {
         "status": "ok",
         "cycle": cycle,
         "message": f"Cycle {cycle} complete.",
+        "outcome": outcome,
+        "delta": delta,
         "high_water_updated": hw_updated,
-        "hypothesis_archived": hypothesis_archived
+        "hypothesis_archived": hypothesis_archived,
+        "auto_rollback": auto_rollback,
     }

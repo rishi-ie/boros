@@ -1,10 +1,6 @@
 {
-  "reasoning": {
-    "name": "Reasoning & Decision-Making",
-    "description": "Boros forms decisions through structured reasoning processes that transform available information (inputs, memory, constraints) into coherent, goal-directed actions. Reasoning operates independently of external retrieval and focuses on how decisions are derived."
-  },
-  "web_search": {
-    "name": "Web Search & Knowledge Retrieval",
-    "description": "Boros retrieves external information from the web to supplement internal knowledge. Web search focuses on identifying knowledge gaps, acquiring relevant information, and validating source quality before use."
+  "memory": {
+    "name": "Cognitive Memory System",
+    "description": "Boros maintains a persistent, evolving memory system that mimics human cognition through episodic storage, semantic abstraction, associative recall, and dynamic reinforcement."
   }
 }
