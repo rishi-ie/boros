@@ -17,17 +17,22 @@ def context_load(params: dict, kernel=None) -> dict:
             except json.JSONDecodeError as e:
                 print(f"Warning: Could not parse evolution record {record_file}: {e}")
 
-    # Load recent experiences (last 5)
-    experiences_file = os.path.join(boros_dir, "memory", "experiences", "experiences.jsonl")
+    # Load recent experiences (last 5) — reads individual exp-*.json files written by memory_commit_archival
+    import glob as _glob
+    experiences_dir = os.path.join(boros_dir, "memory", "experiences")
     manifest["recent_experiences"] = []
-    if os.path.exists(experiences_file):
-        with open(experiences_file) as f:
-            lines = [l.strip() for l in f.readlines() if l.strip()]
-        for l in lines[-5:]:
+    if os.path.exists(experiences_dir):
+        exp_files = sorted(
+            _glob.glob(os.path.join(experiences_dir, "exp-*.json")),
+            key=os.path.getmtime,
+            reverse=True
+        )[:5]
+        for ef in exp_files:
             try:
-                manifest["recent_experiences"].append(json.loads(l))
-            except json.JSONDecodeError as e:
-                print(f"Warning: Could not parse experience line: {l} - {e}")
+                with open(ef) as f:
+                    manifest["recent_experiences"].append(json.load(f))
+            except Exception as e:
+                print(f"Warning: Could not parse experience file {ef}: {e}")
 
     # Load recent scores
     score_file = os.path.join(boros_dir, "memory", "score_history.jsonl")

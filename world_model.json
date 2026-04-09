@@ -1,39 +1,107 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "categories": {
     "reasoning": {
       "name": "Reasoning & Decision-Making",
-      "description": "Boros forms decisions through structured reasoning processes that transform available information (inputs, memory, constraints) into coherent, goal-directed actions. Reasoning operates independently of external retrieval and focuses on how decisions are derived.",
-      "final_state": "An agent that consistently decomposes problems, evaluates multiple possible actions, selects optimal paths based on constraints and expected utility, and adapts its reasoning strategy based on outcomes.",
-      "core_mechanism": {
-        "reasoning_types": {
-          "deductive": "Applies rules and constraints to derive guaranteed conclusions",
-          "inductive": "Infers patterns from repeated observations",
-          "abductive": "Selects the most plausible explanation under uncertainty",
-          "evaluative": "Ranks candidate actions based on expected utility"
+      "description": "Boros forms decisions through structured reasoning processes that transform available information into coherent, goal-directed actions.",
+      "weight": 2.5,
+      "related_skills": ["reasoning"],
+      "current_milestone": 0,
+      "milestones": [
+        {
+          "level": 0,
+          "name": "Basic Decomposition",
+          "difficulty": 3,
+          "unlock_score": 0.65,
+          "unlock_consecutive": 2,
+          "anchors": [
+            "Breaks problems into structured steps",
+            "Generates multiple candidate solutions"
+          ],
+          "rubric": {
+            "level_1": "No structured reasoning. Reactive outputs with no evaluation.",
+            "level_2": "Partial reasoning. Limited decomposition and weak evaluation.",
+            "level_3": "Structured reasoning with multiple candidates and consistent evaluation.",
+            "level_4": "Fully systematic reasoning with explicit multi-step evaluation documented in output files."
+          },
+          "failure_modes": [
+            "Impulsive decisions without decomposition",
+            "Shallow decomposition — one step only",
+            "No candidate comparison"
+          ],
+          "task_template": "This task requires EXPLICIT structured reasoning. You MUST: (1) Call reason_decompose to break the problem into sub-problems. (2) Identify at least 2 candidate approaches and call reason_evaluate_options to score them. (3) Write a file called reasoning_trace.txt that documents your decomposition, candidates, their scores, and your final selection with justification. (4) Only then execute the chosen solution.",
+          "execution_pattern": {
+            "step_1": "Define goal and constraints",
+            "step_2": "Call reason_decompose",
+            "step_3": "Generate 2+ candidates",
+            "step_4": "Call reason_evaluate_options",
+            "step_5": "Write reasoning_trace.txt",
+            "step_6": "Execute chosen solution"
+          }
         },
-        "reasoning_loop": [
-          "Define goal and constraints",
-          "Retrieve relevant internal memory/context",
-          "Generate candidate actions or hypotheses",
-          "Evaluate candidates (utility, constraints, past outcomes)",
-          "Select best action",
-          "Execute and observe outcome",
-          "Update reasoning strategy"
-        ],
-        "decision_policy": {
-          "goal_alignment": "Actions must directly contribute to the objective",
-          "constraint_satisfaction": "Respect all system and task constraints",
-          "expected_utility": "Prefer highest likelihood of success",
-          "risk_awareness": "Penalize high-uncertainty or failure-prone actions"
+        {
+          "level": 1,
+          "name": "Constraint Satisfaction",
+          "difficulty": 5,
+          "unlock_score": 0.75,
+          "unlock_consecutive": 2,
+          "anchors": [
+            "Evaluates alternatives before acting",
+            "Maintains logical consistency under constraints",
+            "Adapts reasoning from outcomes"
+          ],
+          "rubric": {
+            "level_1": "Ignores constraints entirely.",
+            "level_2": "Acknowledges constraints but violates some.",
+            "level_3": "Satisfies all stated constraints with documented reasoning.",
+            "level_4": "Satisfies all constraints, detects implicit ones, and documents tradeoffs explicitly."
+          },
+          "failure_modes": [
+            "Logical inconsistency",
+            "Mode collapse — same strategy regardless of constraints",
+            "Hallucinated justification"
+          ],
+          "task_template": "This task has explicit constraints that MUST all be satisfied. You MUST: (1) List every constraint before starting. (2) Call reason_check_logic after forming your plan to verify no constraint is violated. (3) Document any constraint tradeoffs in a file called constraint_analysis.txt. (4) Execute only after verifying logical consistency.",
+          "execution_pattern": {
+            "step_1": "List all constraints explicitly",
+            "step_2": "Generate plan satisfying all constraints",
+            "step_3": "Call reason_check_logic",
+            "step_4": "Write constraint_analysis.txt",
+            "step_5": "Execute verified plan"
+          }
         },
-        "consistency_checks": [
-          "Detect logical contradictions",
-          "Detect invalid reasoning steps",
-          "Ensure action follows from evaluation",
-          "Reject unjustified conclusions"
-        ]
-      },
+        {
+          "level": 2,
+          "name": "Adaptive Multi-step Planning",
+          "difficulty": 7,
+          "unlock_score": 0.85,
+          "unlock_consecutive": 3,
+          "anchors": [
+            "Adapts strategy based on intermediate results",
+            "Detects when initial plan is failing",
+            "Recovers from partial failures without starting over"
+          ],
+          "rubric": {
+            "level_1": "Executes a plan blindly to failure.",
+            "level_2": "Stops on failure but cannot recover.",
+            "level_3": "Detects failures and retries with a modified approach.",
+            "level_4": "Continuously adapts plan based on tool feedback, documents adaptation decisions, and recovers efficiently."
+          },
+          "failure_modes": [
+            "Rigid adherence to failing plan",
+            "Giving up on first obstacle",
+            "No documentation of adaptation decisions"
+          ],
+          "task_template": "This task will require adapting your plan as you go. You MUST: (1) Start with an explicit plan in plan.txt. (2) After each major step, check if the outcome matched expectations. (3) If it didn't, call reason_generate_plan to produce a revised plan and update plan.txt. (4) Document every plan change with a reason in plan.txt.",
+          "execution_pattern": {
+            "step_1": "Write initial plan to plan.txt",
+            "step_2": "Execute step",
+            "step_3": "Compare actual vs expected outcome",
+            "step_4": "If diverged: call reason_generate_plan, update plan.txt",
+            "step_5": "Continue until complete"
+          }
+        }
+      ],
       "anchors": [
         "Breaks problems into structured steps",
         "Generates multiple candidate solutions",
@@ -62,49 +130,110 @@
         "Mode collapse (same strategy always)",
         "Hallucinated justification"
       ],
-      "independence_from": {
-        "web_search": "Reasoning determines how decisions are made. Web search only supplies additional information when needed.",
-        "memory_continuity": "Reasoning uses memory but does not guarantee persistence of knowledge."
-      },
-      "weight": 2.5,
-      "related_skills": ["reasoning"],
       "task_template": "This task requires EXPLICIT structured reasoning. You MUST follow this process before producing any output: (1) Call reason_decompose to break the problem into sub-problems. (2) Identify at least 2 candidate approaches and call reason_evaluate_options to score them against stated criteria. (3) Write a file called reasoning_trace.txt that documents your decomposition, the candidates you considered, their scores, and your final selection with justification. (4) Only then execute the chosen solution. Tasks that skip decomposition or produce output without documented reasoning will score at Level 1."
     },
     "web_search": {
       "name": "Web Search & Knowledge Retrieval",
-      "description": "Boros retrieves external information from the web to supplement internal knowledge. Web search focuses on identifying knowledge gaps, acquiring relevant information, and validating source quality before use.",
-      "final_state": "An agent that reliably detects when external knowledge is required, retrieves high-quality information efficiently, validates it across sources, and provides structured inputs for reasoning and decision-making.",
-      "core_mechanism": {
-        "search_triggering": {
-          "knowledge_gap_detection": "Triggers when required information is missing",
-          "uncertainty_threshold": "Triggers when confidence is low",
-          "novelty_detection": "Triggers for unfamiliar or dynamic domains"
+      "description": "Boros retrieves external information from the web to supplement internal knowledge, focusing on identifying knowledge gaps and validating source quality.",
+      "weight": 2.0,
+      "related_skills": ["web-research"],
+      "current_milestone": 0,
+      "milestones": [
+        {
+          "level": 0,
+          "name": "Basic Retrieval",
+          "difficulty": 3,
+          "unlock_score": 0.60,
+          "unlock_consecutive": 2,
+          "anchors": [
+            "Detects knowledge gaps before acting",
+            "Forms precise search queries",
+            "Produces a sources.txt file"
+          ],
+          "rubric": {
+            "level_1": "No search performed. Relies on assumed knowledge.",
+            "level_2": "Searches but uses vague queries and accepts first result.",
+            "level_3": "Uses targeted queries, retrieves multiple results, documents sources.",
+            "level_4": "Identifies all knowledge gaps upfront, uses precise queries per gap, validates across sources, produces structured sources.txt."
+          },
+          "failure_modes": [
+            "Failure to search at all",
+            "Single vague query for complex task",
+            "No sources.txt produced"
+          ],
+          "task_template": "This task requires active web research. You MUST NOT rely on assumed prior knowledge. Follow this process: (1) Before doing anything, identify every piece of information the task requires that you cannot verify from memory. (2) Call research_search_engine at least once per identified knowledge gap — minimum 2 separate searches total. (3) Produce a file called sources.txt listing every URL you retrieved information from. (4) Every factual claim in your output must be traceable to a source in sources.txt.",
+          "execution_pattern": {
+            "step_1": "Identify knowledge gaps",
+            "step_2": "Call research_search_engine per gap",
+            "step_3": "Evaluate and filter results",
+            "step_4": "Write sources.txt",
+            "step_5": "Produce final output with citations"
+          }
         },
-        "query_generation": {
-          "goal_alignment": "Queries directly reflect task objectives",
-          "iterative_refinement": "Queries improve based on results",
-          "multi_query_strategy": "Uses multiple query variations to improve coverage"
+        {
+          "level": 1,
+          "name": "Multi-Source Validation",
+          "difficulty": 5,
+          "unlock_score": 0.72,
+          "unlock_consecutive": 2,
+          "anchors": [
+            "Uses multiple sources per claim",
+            "Filters low-quality information",
+            "Returns structured, usable knowledge"
+          ],
+          "rubric": {
+            "level_1": "Single source per claim. No validation.",
+            "level_2": "Uses 2 sources but doesn't compare or validate.",
+            "level_3": "Compares across sources, notes conflicts, selects most credible.",
+            "level_4": "Cross-validates all key claims across 3+ sources, explicitly notes credibility judgments, and flags uncertain information."
+          },
+          "failure_modes": [
+            "Single-source reliance",
+            "Accepting low-quality sources",
+            "No conflict resolution between sources"
+          ],
+          "task_template": "This task requires multi-source validation. You MUST: (1) For every key factual claim, find at least 2 independent sources. (2) Call research_search_engine with different query phrasings to find independent sources. (3) Write a file called validation_report.txt that for each claim lists: all sources found, whether they agree, and your credibility judgment. (4) Flag any claim where sources conflict.",
+          "execution_pattern": {
+            "step_1": "List all key claims needing validation",
+            "step_2": "Search with 2+ query variations per claim",
+            "step_3": "Compare sources for agreement/conflict",
+            "step_4": "Write validation_report.txt",
+            "step_5": "Produce output with credibility flags"
+          }
         },
-        "retrieval_loop": [
-          "Formulate query",
-          "Retrieve candidate sources",
-          "Rank by relevance",
-          "Extract key information",
-          "Refine query if needed",
-          "Repeat until sufficient coverage"
-        ],
-        "source_evaluation": {
-          "credibility": "Prioritize authoritative and verifiable sources",
-          "cross_verification": "Validate across multiple sources",
-          "recency": "Account for time sensitivity",
-          "bias_detection": "Identify conflicting or biased information"
-        },
-        "output_contract": {
-          "structured_output": "Return distilled, relevant facts—not raw dumps",
-          "uncertainty_tagging": "Mark weak or conflicting information",
-          "source_traceability": "Maintain links between claims and sources"
+        {
+          "level": 2,
+          "name": "Iterative Refinement",
+          "difficulty": 7,
+          "unlock_score": 0.82,
+          "unlock_consecutive": 3,
+          "anchors": [
+            "Refines queries based on results",
+            "Detects when initial results are insufficient",
+            "Uses domain-specific search strategies"
+          ],
+          "rubric": {
+            "level_1": "Uses same query regardless of results quality.",
+            "level_2": "Tries a second query if first fails, but no systematic refinement.",
+            "level_3": "Systematically refines queries based on result analysis.",
+            "level_4": "Applies iterative refinement loop: analyzes result gaps, reformulates queries, tracks coverage, and stops when sufficient."
+          },
+          "failure_modes": [
+            "Giving up after first search failure",
+            "No query reformulation",
+            "Information overload — no filtering"
+          ],
+          "task_template": "This task requires iterative search refinement. You MUST: (1) Start with an initial query. (2) Analyze results — identify what's missing. (3) Formulate a refined query targeting the gap. (4) Repeat until you have sufficient coverage. (5) Write search_log.txt documenting every query tried, what it returned, and what gap it addressed. Minimum 3 search iterations required.",
+          "execution_pattern": {
+            "step_1": "Initial query",
+            "step_2": "Analyze result gaps",
+            "step_3": "Reformulate query",
+            "step_4": "Repeat steps 2-3 (min 3 iterations)",
+            "step_5": "Write search_log.txt",
+            "step_6": "Produce final output"
+          }
         }
-      },
+      ],
       "anchors": [
         "Detects knowledge gaps before acting",
         "Forms precise search queries",
@@ -133,14 +262,6 @@
         "Accepting low-quality sources",
         "Information overload",
         "Ignoring recency"
-      ],
-      "independence_from": {
-        "reasoning": "Web search retrieves information. Reasoning determines how that information is used.",
-        "memory_continuity": "Web search provides new knowledge, but memory determines persistence."
-      },
-      "weight": 2.0,
-      "related_skills": [
-        "web-research"
       ],
       "task_template": "This task requires active web research. You MUST NOT rely on assumed prior knowledge. Follow this process: (1) Before doing anything, identify every piece of information the task requires that you cannot verify from memory. (2) Call research_search_engine at least once per identified knowledge gap — minimum 2 separate searches total. (3) Produce a file called sources.txt listing every URL you retrieved information from and the date accessed. (4) Every factual claim in your output must be traceable to a source in sources.txt. Tasks that skip searching or produce outputs without sourced facts will score at Level 1."
     }

@@ -93,19 +93,53 @@ def review_proposal(params: dict, kernel=None) -> dict:
     with open(os.path.join(reviews_dir, f"review-{proposal_id}.json"), "w") as f:
         json.dump(review_record, f, indent=2)
 
-    # Auto-rollback on rejection to enforce safety boundary
-    if verdict != "apply" and kernel:
+    # On "modify": write structured feedback to session so LLM can act on it, then rollback
+    # On "reject": rollback and stop — proposal is dead
+    if verdict == "modify":
         try:
-            prop_file = os.path.join(boros_dir, "session", "proposals", f"{proposal_id}.json")
-            if os.path.exists(prop_file):
-                with open(prop_file) as f:
-                    proposal = json.load(f)
-                target = proposal.get("target", proposal.get("skill_name"))
-                snapshot_id = proposal.get("snapshot_id")
-                if target and snapshot_id and "forge_rollback" in kernel.registry:
-                    kernel.registry["forge_rollback"]({"target": target, "snapshot_id": snapshot_id}, kernel)
-                    reason += " [AUTO-ROLLBACK EXECUTED]"
-        except Exception as rollback_e:
-            reason += f" [AUTO-ROLLBACK FAILED: {rollback_e}]"
+            os.makedirs(os.path.join(boros_dir, "session"), exist_ok=True)
+            feedback = {
+                "proposal_id": proposal_id,
+                "verdict": "modify",
+                "feedback": reason,
+                "target_file": target_file,
+                "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
+            }
+            with open(os.path.join(boros_dir, "session", "review_feedback.json"), "w") as f:
+                json.dump(feedback, f, indent=2)
+        except Exception as e:
+            reason += f" [feedback write failed: {e}]"
+        # Still rollback the file changes since they weren't approved
+        _do_rollback(boros_dir, proposal_id, kernel, reason)
+
+    elif verdict == "reject":
+        _do_rollback(boros_dir, proposal_id, kernel, reason)
 
     return {"status": "ok", "verdict": verdict, "reason": reason, "confidence": confidence}
+
+
+def _do_rollback(boros_dir, proposal_id, kernel, reason):
+    """Restore skill files from snapshot after a non-apply verdict."""
+    if not kernel:
+        return
+    try:
+        prop_file = os.path.join(boros_dir, "session", "proposals", f"{proposal_id}.json")
+        if not os.path.exists(prop_file):
+            # Also try evolution_target for snapshot_id
+            target_file = os.path.join(boros_dir, "session", "evolution_target.json")
+            if os.path.exists(target_file):
+                with open(target_file) as f:
+                    target_data = json.load(f)
+                snapshot_id = target_data.get("snapshot_id")
+                skill_name  = target_data.get("target_skill")
+                if snapshot_id and skill_name and "forge_rollback" in kernel.registry:
+                    kernel.registry["forge_rollback"]({"target": skill_name, "snapshot_id": snapshot_id}, kernel)
+            return
+        with open(prop_file) as f:
+            proposal = json.load(f)
+        target      = proposal.get("target", proposal.get("skill_name"))
+        snapshot_id = proposal.get("snapshot_id")
+        if target and snapshot_id and "forge_rollback" in kernel.registry:
+            kernel.registry["forge_rollback"]({"target": target, "snapshot_id": snapshot_id}, kernel)
+    except Exception as rollback_e:
+        print(f"[review_proposal] rollback failed: {rollback_e}")

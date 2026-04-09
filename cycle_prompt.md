@@ -22,6 +22,9 @@ Begin a new evolution cycle by executing this strict 4-stage loop: REFLECT (Read
 12. `forge_test_suite` / `forge_validate` — run tests & verify syntax of your skill extensions.
 13. `evolve_propose` — package the skill diff into a formal proposal for review
 14. `review_proposal` — submit it to the Meta-Evaluation Review Board (auto-rollback if rejected!)
+    - **`apply`**: call `evolve_apply` immediately.
+    - **`reject`**: files already rolled back. Do NOT re-propose the same change. Take a different approach or target a different skill. Advance to EVAL anyway to record the cycle.
+    - **`modify`**: files rolled back. Read `session/review_feedback.json` for the specific required changes. Make those changes, call `evolve_propose` again, then `review_proposal` again. Repeat until `apply` or `reject`.
 15. If approved: `evolve_apply` to commit and trigger dynamic HOT-RELOAD.
 16. `loop_advance_stage` — transition to EVAL
 
@@ -29,12 +32,12 @@ Begin a new evolution cycle by executing this strict 4-stage loop: REFLECT (Read
 
 17. `eval_request` — generate a sandbox evaluation task (returns request_id). ALWAYS pass `categories` matching your world model.
 18. `eval_read_scores` — pass the request_id from step 17 to get FRESH scores for THIS cycle. This call BLOCKS until results arrive.
-19. `eval_check_regression` — verify your changes actually improved the score
+19. `eval_check_regression` — verify your changes actually improved the score (auto-rollback in code if regression detected — check `auto_rollback` field in response)
 
 ## STAGE 4: COMMIT (Write Outcome)
 
 20. `memory_commit_archival` — BEFORE ending the loop, you MUST commit the outcome of your cycle (success/failure, metrics, failure reasons) as an experience.
-21. `loop_end_cycle` — finalize the cycle (high-water marks are updated automatically)
+21. `loop_end_cycle` — finalize the cycle. This automatically: updates high-water marks, checks milestone advancement (`eval_check_milestone` is called for you — do NOT call it manually), archives and deletes the hypothesis, clears session.
 
 ## TARGETING RULES — MANDATORY
 

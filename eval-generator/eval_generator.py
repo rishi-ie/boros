@@ -98,6 +98,38 @@ class EvalGenerator:
                 self._process_request(req_path)
 
     # ─────────────────────────────────────────────────────────
+    # Milestone helpers
+    # ─────────────────────────────────────────────────────────
+    def _get_milestone_data(self, category_id):
+        """Return the active milestone data for a category, falling back to flat fields."""
+        cat = self.world_model["categories"].get(category_id, {})
+        milestones = cat.get("milestones", [])
+        current_idx = cat.get("current_milestone", 0)
+        if milestones and current_idx < len(milestones):
+            m = milestones[current_idx]
+            return {
+                "anchors":         m.get("anchors",         cat.get("anchors", [])),
+                "rubric":          m.get("rubric",          cat.get("rubric", {})),
+                "failure_modes":   m.get("failure_modes",   cat.get("failure_modes", [])),
+                "task_template":   m.get("task_template",   cat.get("task_template", "")),
+                "execution_pattern": m.get("execution_pattern", cat.get("execution_pattern", {})),
+                "difficulty":      m.get("difficulty",      5),
+                "milestone_level": current_idx,
+                "milestone_name":  m.get("name", f"Level {current_idx}")
+            }
+        # Flat fallback — no milestones array or index out of range
+        return {
+            "anchors":           cat.get("anchors", []),
+            "rubric":            cat.get("rubric", {}),
+            "failure_modes":     cat.get("failure_modes", []),
+            "task_template":     cat.get("task_template", ""),
+            "execution_pattern": cat.get("execution_pattern", {}),
+            "difficulty":        5,
+            "milestone_level":   0,
+            "milestone_name":    "default"
+        }
+
+    # ─────────────────────────────────────────────────────────
     # Task generation
     # ─────────────────────────────────────────────────────────
     def _generate_task(self, category_id):
@@ -105,14 +137,14 @@ class EvalGenerator:
         if not cat or not self.llm:
             return "Write a script that prints Hello World to output.txt."
 
-        anchors = cat.get("anchors", [])
-        rubric_l4 = cat.get("rubric", {}).get("level_4", "Excellent performance")
-        exec_pattern = cat.get("execution_pattern", {})
-        failure_modes = cat.get("failure_modes", [])
-        task_template = cat.get("task_template", "")
+        md = self._get_milestone_data(category_id)
+        anchors       = md["anchors"]
+        rubric_l4     = md["rubric"].get("level_4", "Excellent performance")
+        exec_pattern  = md["execution_pattern"]
+        failure_modes = md["failure_modes"]
+        task_template = md["task_template"]
 
-        import random
-        anchor = random.choice(anchors) if anchors else "general capability"
+        anchor  = random.choice(anchors)       if anchors       else "general capability"
         failure = random.choice(failure_modes) if failure_modes else "generic failure"
 
         template_instruction = (
@@ -122,7 +154,8 @@ class EvalGenerator:
         ) if task_template else ""
 
         prompt = (
-            f"Create a concrete, verifiable task that tests the '{category_id}' capability.\n\n"
+            f"Create a concrete, verifiable task that tests the '{category_id}' capability "
+            f"at milestone level {md['milestone_level']} ({md['milestone_name']}).\n\n"
             f"The task must specifically test this anchor criterion: '{anchor}'\n"
             f"The gold standard (Level 4) is: '{rubric_l4}'\n"
             f"Design the task to expose this failure mode: '{failure}'\n\n"
@@ -154,46 +187,53 @@ class EvalGenerator:
                          if os.path.isfile(os.path.join(workspace_dir, f))]
         files_str = f"Files created: {', '.join(file_list)}" if file_list else "No files created."
 
-        has_error = "Error:" in transcript
         no_files = len(file_list) == 0
 
-        if has_error or no_files:
-            reason = "Task execution failed objectively. "
-            if has_error:
-                reason += "Transcript contains fatal tool errors. "
-            if no_files:
-                reason += "Agent failed to produce any artifacts. "
+        # Hard fail only if the agent produced nothing AND the final action was an error.
+        # Intermediate "Error:" lines are recoverable — we don't penalise recovery.
+        lines = [l.strip() for l in transcript.splitlines() if l.strip()]
+        last_tool_line = next((l for l in reversed(lines) if l.startswith("Tool ")), "")
+        fatal_final_error = ("Error:" in last_tool_line or '"status": "error"' in last_tool_line)
+
+        if no_files and fatal_final_error:
+            reason = "Task failed: no output files produced and final tool call errored."
             return {"outcome_score": 0.0, "quality_score": 0.0, "quality_reason": reason, "outcome_details": files_str}
 
         # ── Layer 2: Outcome score — deterministic artifact checks ──
         outcome_score = 0.0
         structural_notes = []
 
-        non_empty_files = 0
+        # +0.5: at least one output file with meaningful content (>50 bytes)
+        meaningful_files = 0
         for fname in file_list:
             fpath = os.path.join(workspace_dir, fname)
             try:
-                if os.path.getsize(fpath) > 10:
-                    non_empty_files += 1
+                if os.path.getsize(fpath) > 50:
+                    meaningful_files += 1
             except OSError:
                 pass
-        if non_empty_files > 0:
+        if meaningful_files > 0:
             outcome_score += 0.5
-            structural_notes.append(f"{non_empty_files} non-empty output file(s)")
+            structural_notes.append(f"{meaningful_files} meaningful output file(s)")
 
-        tool_call_count = transcript.count("Tool ")
-        if tool_call_count >= 2:
+        # +0.25: agent made domain-relevant tool calls (not just terminal spam)
+        domain_tools = ["research_search_engine", "research_browse", "reason_decompose",
+                        "reason_evaluate_options", "reason_check_logic", "reason_generate_plan",
+                        "write_file", "memory_commit_archival"]
+        used_domain_tool = any(f"Tool {t}" in transcript for t in domain_tools)
+        if used_domain_tool:
             outcome_score += 0.25
-            structural_notes.append(f"{tool_call_count} tool calls observed")
+            structural_notes.append("Domain-relevant tool(s) used")
 
-        completion_signals = ["status: ok", "successfully", "complete", "finished", "done"]
-        if any(sig in transcript.lower() for sig in completion_signals):
+        # +0.25: final tool result indicates success (last tool line has status ok)
+        final_success = '"status": "ok"' in last_tool_line or "status: ok" in last_tool_line.lower()
+        if final_success:
             outcome_score += 0.25
-            structural_notes.append("Completion signal detected in transcript")
+            structural_notes.append("Final tool call succeeded")
 
         outcome_score = round(min(outcome_score, 1.0), 3)
 
-        # ── Layer 3: Quality score — LLM grades against rubric ──────
+        # ── Layer 3: Quality score — LLM grades against active milestone rubric ──
         if not self.llm:
             return {
                 "outcome_score": outcome_score,
@@ -202,10 +242,10 @@ class EvalGenerator:
                 "outcome_details": files_str
             }
 
-        cat = self.world_model["categories"].get(category_id, {})
-        rubric = cat.get("rubric", {})
+        md = self._get_milestone_data(category_id)
+        rubric  = md["rubric"]
+        anchors = md["anchors"]
         rubric_text = "\n".join(f"Level {k[-1]}: {v}" for k, v in rubric.items() if v)
-        anchors = cat.get("anchors", [])
         anchor_text = "\n".join(f"- {a}" for a in anchors)
 
         # Use the tail of the transcript so file-creation evidence isn't cut off
@@ -331,13 +371,24 @@ class EvalGenerator:
     # ─────────────────────────────────────────────────────────
     # Multi-task category evaluation — runs N tasks, averages scores
     # ─────────────────────────────────────────────────────────
-    def _eval_single_category(self, cat_id, sandbox_dir, kernel, eval_id):
-        """Evaluate a single category over N tasks. Returns (cat_id, averaged_score_data, combined_transcript, first_task)."""
+    def _eval_single_category(self, cat_id, sandbox_dir, eval_id):
+        """Evaluate a single category over N tasks. Each category gets its own BorosKernel
+        instance so concurrent evaluations cannot share or corrupt kernel state."""
         cat_start = time.time()
         num_tasks = self.config.get("eval_tasks_per_category", 3)
 
-        cat = self.world_model["categories"].get(cat_id, {})
-        task_template = cat.get("task_template", "")
+        md = self._get_milestone_data(cat_id)
+        task_template = md["task_template"]
+        milestone_level = md["milestone_level"]
+        milestone_name  = md["milestone_name"]
+        _log(f"  [{cat_id}] Milestone {milestone_level}: {milestone_name} (difficulty={md['difficulty']})", "INFO")
+
+        # Fresh isolated kernel per category — prevents state leakage under concurrency
+        _log(f"  [{cat_id}] Loading isolated BorosKernel...", "INFO")
+        kernel = BorosKernel()
+        for skill_name in kernel.manifest.get("skills", {}):
+            kernel.reload_skill(skill_name)
+        _log(f"  [{cat_id}] Kernel ready", "OK")
 
         _log(f"  [{cat_id}] Running {num_tasks} task(s)...", "INFO")
 
@@ -419,13 +470,7 @@ class EvalGenerator:
             _log(f"  Categories: {', '.join(categories)}")
             request_start = time.time()
 
-            # Create a SINGLE kernel for all categories
-            _log("  Loading BorosKernel...", "INFO")
-            kernel = BorosKernel()
-            for skill_name in kernel.manifest.get("skills", {}):
-                kernel.reload_skill(skill_name)
-            _log("  BorosKernel loaded and skills reloaded", "OK")
-
+            # Each category gets its own kernel — see _eval_single_category
             sandbox_dir = os.path.join(self.sandboxes_dir, eval_id)
             scores = {}
             transcripts = {}
@@ -437,7 +482,7 @@ class EvalGenerator:
                 with ThreadPoolExecutor(max_workers=self.max_concurrency) as executor:
                     futures = {}
                     for cat_id in categories:
-                        future = executor.submit(self._eval_single_category, cat_id, sandbox_dir, kernel, eval_id)
+                        future = executor.submit(self._eval_single_category, cat_id, sandbox_dir, eval_id)
                         futures[future] = cat_id
 
                     for future in as_completed(futures, timeout=self.category_timeout * len(categories)):
@@ -475,7 +520,7 @@ class EvalGenerator:
                 for cat_id in categories:
                     try:
                         cat_id, score_data, transcript, task = self._eval_single_category(
-                            cat_id, sandbox_dir, kernel, eval_id
+                            cat_id, sandbox_dir, eval_id
                         )
                         scores[cat_id] = {
                             "outcome_score": score_data["outcome_score"],
@@ -515,7 +560,7 @@ class EvalGenerator:
                 "cycle": cycle,
                 "scores": {k: round(_blended(v), 3) for k, v in scores.items()},
                 "composite": composite_score,
-                "difficulty_level": 5,
+                "difficulty_level": {k: self._get_milestone_data(k)["difficulty"] for k in categories},
                 "scoring_breakdown": scores
             }
 

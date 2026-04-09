@@ -15,6 +15,15 @@ def loop_advance_stage(params: dict, kernel=None) -> dict:
     idx = stages.index(current) if current in stages else 0
     next_stage = stages[idx + 1] if idx + 1 < len(stages) else "END"
 
+    # Hard gate: REFLECT → EVOLVE requires a written hypothesis
+    if current == "REFLECT" and next_stage == "EVOLVE":
+        hyp_file = os.path.join(boros_dir, "session", "hypothesis.json")
+        if not os.path.exists(hyp_file):
+            return {
+                "status": "error",
+                "message": "Cannot advance to EVOLVE without a hypothesis. Call reflection_write_hypothesis first."
+            }
+
     state["stage"] = next_stage
     with open(state_file, "w") as f:
         json.dump(state, f, indent=2)

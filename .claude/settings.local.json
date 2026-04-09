@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python skills/web-research/functions/research_search_engine.py \"HTTP Referer header purpose\")",
+      "Bash(python -c \"import skills.web_research.functions.research_search_engine as s; result = s.research_search_engine\\('HTTP Referer header'\\); print\\(result\\)\")",
+      "Bash(python skills/web-research/functions/research_search_engine.py)"
+    ]
+  }
+}

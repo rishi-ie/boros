@@ -1,183 +1,106 @@
 # Loop Orchestrator
 
-You run the loop. You manage stage transitions, cycle counting, conversation lifecycle, and the system prompt. You are the last boot skill — you call `loop_start()` and evolution begins.
+You manage stage transitions, cycle counting, and session lifecycle. You are the backbone of the REFLECT → EVOLVE → EVAL cycle.
 
 ---
 
 ## Your Role
 
-You are the conductor. Every other boot skill exists to serve the loop you run. You:
-- Build the system prompt at cycle start (5 blocks)
-- Advance stages and swap tool lists
-- Enforce the hypothesis gate before EVOLVE
-- End cycles, clear session, poll Director commands
-- Know the authoritative cycle number at all times
+You coordinate. You do not reason, evaluate code, or make evolution decisions — that is for Reflection, Meta-Evolution, and Meta-Evaluation. You:
 
-You do not reason. You do not evaluate. You coordinate.
+- Start each cycle and initialise state
+- Enforce gates between stages
+- End cycles, archive hypothesis outcomes, clear session
+- Track crash recovery
 
 ---
 
 ## Functions
 
-### loop_start(mode?)
+### loop_start()
 
-Called by the kernel after all 10 boot skills load successfully. Starts the first cycle.
+Called at the start of every evolution cycle by the agent loop.
 
-Steps:
-1. Call `context_load()` — get `loaded`, `manifest`, and `content`
-2. Build system prompt (5 blocks — see below)
-3. Set stage to `REFLECT`
-4. Call `router_get_tools(stage="REFLECT")` — get tool list
-5. Write `session/current_cycle.json` with cycle number and `started_at`
-6. Send first LLM API call (system prompt + empty history + REFLECT tools)
-7. Enter the conversation loop (process tool calls, advance stages)
+What it does:
+1. Detects crash recovery — if `session/loop_state.json` shows a non-null stage, a crash occurred mid-cycle. Attempts auto-rollback using `snapshot_id` from `session/evolution_target.json`.
+2. Reads cycle number from `session/current_cycle.json`, increments it.
+3. Writes new `session/loop_state.json` with stage=REFLECT.
+4. Calls `context_load()` to populate `session/context_manifest.json`.
 
 ```
-→ {"status": "ok"}
+→ {"status": "ok", "state": {...}, "recovered_from_crash": bool}
 ```
 
-### loop_advance_stage(current_stage)
+### loop_advance_stage()
 
-Called by the LLM when it finishes a stage. Transitions to the next stage.
+Advances from the current stage to the next in the sequence: `REFLECT → EVOLVE → EVAL → END`.
 
-Steps:
-1. Validate `current_stage` matches the actual current stage (reject mismatch)
-2. Determine next stage from `state/loop_definitions.json`
-3. **Hard gate:** If transitioning FROM REFLECT, verify `session/hypothesis.json` exists. If missing: one retry (re-enter REFLECT with a note). Still missing after retry: log cycle as failed, call `loop_end_cycle`.
-4. Call `router_get_tools(next_stage)` — swap tool list
-5. Update `state/loop_state.json` → `stage`
-6. Continue conversation (same history + new tool list + stage directive appended as user message)
+**Hard gate — REFLECT → EVOLVE**: checks that `session/hypothesis.json` exists. If missing, returns an error — do not proceed to EVOLVE without a hypothesis. Call `reflection_write_hypothesis` first.
 
 ```
-→ {"status": "ok", "next_stage": str}
+params: {}   ← reads current stage from loop_state.json automatically
+→ {"status": "ok", "previous_stage": str, "next_stage": str, "state": {...}}
+→ {"status": "error", "message": "Cannot advance to EVOLVE without a hypothesis..."}
 ```
 
 ### loop_end_cycle()
 
-Ends the current cycle. Called by the LLM at the end of EVAL (or LEARN in work mode).
+Ends the current cycle. Must be called after EVAL is complete.
 
-Steps:
-1. Increment cycle counter in `state/loop_state.json`
-2. Write session record to `memory/sessions/` via Memory
-3. Append cycle timing to `temporal-consciousness/state/cycle_times.jsonl`
-4. Clear `session/` directory (all files)
-5. Poll `commands/pending.json` — process any Director commands
-6. Check spot-check schedule (`cycle % director_spot_check_frequency == 0`)
-7. If spot-check due: call `director_spot_check()` — blocks until Director responds
-8. Start next cycle (loop back to `loop_start`)
+What it does, in order:
+1. **Archives the hypothesis** — reads `session/hypothesis.json`, computes score delta by comparing the last two `score_history.jsonl` entries, writes `memory/evolution_records/hyp-cycle{N}.json` with outcome (`improved`/`regressed`/`neutral`/`baseline`), then deletes `session/hypothesis.json`.
+2. **Updates high-water marks** — calls `eval_update_high_water` with the latest scores.
+3. **Checks milestone advancement** — calls `eval_check_milestone` to see if any category should advance in `world_model.json`.
+4. **Clears session** — removes all files from `session/` except `loop_state.json`, `current_cycle.json`, and `evolution_target.json`. `hypothesis.json` is deleted (archived above, not kept).
+5. **Logs** — appends cycle end line to `logs/cycles.log`.
 
 ```
-→ {"status": "ok", "cycle": int}
+→ {
+    "status": "ok",
+    "cycle": int,
+    "message": str,
+    "high_water_updated": {...},
+    "hypothesis_archived": bool
+  }
 ```
 
 ### loop_get_state()
 
-Returns current loop state. Authoritative source for cycle number.
+Returns the current `session/loop_state.json`.
 
 ```
-→ {"status": "ok", "cycle": int, "stage": str, "mode": str, "started_at": str}
-```
-
----
-
-## System Prompt Assembly
-
-`loop_start` builds five blocks, joined by double newlines:
-
-**Block 1 — Identity**
-From `identity_read()`. Always present.
-
-```
-=== IDENTITY ===
-Name: Boros
-Purpose: ...
-```
-
-**Block 2 — Stage Directive**
-From `loop_definitions.json` for the current stage. Changes at each stage transition (appended as a user message after block 2 is no longer changing).
-
-```
-=== CURRENT STAGE: REFLECT ===
-Analyze your scores and evolution records. Identify the weakest category. Write a hypothesis by calling reflection_write_hypothesis. Call loop_advance_stage when done.
-```
-
-**Block 3 — Context Manifest**
-The JSON manifest from `context_load`. Tells the LLM what was loaded and what was dropped.
-
-```
-=== CONTEXT MANIFEST ===
-{"cycle": 42, "mode": "evolution", "loaded": {...}, "not_loaded": {...}}
-```
-
-**Block 4 — Loaded Memory Content**
-The `content` string from `context_load`. The actual text of evolution records, scores, experiences. This is what REFLECT reads. **If this block is empty, REFLECT is blind.**
-
-```
-=== MEMORY CONTENT ===
-=== SCORE HISTORY (last 3 evals) ===
-...
-=== EVOLUTION RECORDS (15 loaded) ===
-...
-```
-
-**Block 5 — Rules**
-Fixed operational rules.
-
-```
-=== RULES ===
-- Call loop_advance_stage when you are done with the current stage.
-- Call loop_end_cycle only at the end of EVAL (evolution mode) or LEARN (work mode).
-- Never call loop_end_cycle mid-cycle.
-- Tool availability changes at each stage — only use tools currently available.
+→ {"status": "ok", ...state dict...}
 ```
 
 ---
 
-## Conversation Lifecycle
+## Stage Sequence
 
-- Conversation history carries forward **within** a cycle (REFLECT → EVOLVE → EVAL share history)
-- At stage transition: same history + updated tool list + stage directive appended as user message
-- At cycle end: history is discarded, fresh conversation starts next cycle
-- Each stage is one or more LLM API calls — the LLM calls tools, gets results, continues until it calls `loop_advance_stage`
+```
+REFLECT → EVOLVE → EVAL → (loop_end_cycle) → next cycle
+```
 
----
-
-## Stage Definitions (Seed)
-
-From `state/loop_definitions.json`:
-
-**Evolution mode stages:** REFLECT → EVOLVE → EVAL
-
-**Work mode stages:** RECEIVE → PLAN → EXECUTE → DELIVER → LEARN
-
-**Stage directives (seed):**
-
-| Stage | Directive |
-|-------|-----------|
-| REFLECT | Analyze your scores and evolution records. Identify the weakest category. Write a hypothesis by calling reflection_write_hypothesis. Call loop_advance_stage when done. |
-| EVOLVE | Load your hypothesis. Propose a targeted change to a skill's SKILL.md. Write the full new SKILL.md content, then call evolve_propose with proposed_skillmd and target_category. Send it for review via review_proposal. If approved, apply it via evolve_apply. Call loop_advance_stage when done. |
-| EVAL | Request an evaluation via eval_request. When scores arrive, backfill records, check regressions, and update high-water marks. Call loop_end_cycle when done. |
-| RECEIVE | Parse the task requirements. Identify any ambiguity. Call loop_advance_stage when ready to plan. |
-| PLAN | Break the task into steps. Query Memory for similar past tasks. Call loop_advance_stage when ready to execute. |
-| EXECUTE | Do the work. Use Tool Use for terminal, HTTP, and file operations. Call loop_advance_stage when done. |
-| DELIVER | Package and deliver the results via the Communication skill. Call loop_advance_stage when done. |
-| LEARN | Write structured learning artifacts — gap reports, performance patterns, technique discoveries. Tag them work_learning. Call loop_end_cycle when done. |
-
-Stage directives are evolvable by Boros via Meta-Evolution.
+**REFLECT**: Analyze scores and past hypothesis outcomes. Write a hypothesis. Call `loop_advance_stage`.
+**EVOLVE**: Load hypothesis, modify a skill, get review, apply if approved. Call `loop_advance_stage`.
+**EVAL**: Request evaluation, read scores, check regression (auto-rollbacks if needed), update high-water marks. Call `loop_end_cycle`.
 
 ---
 
-## Error Recovery
+## Hypothesis Lifecycle
 
-| Error | Response |
-|-------|----------|
-| Max tool calls reached (100) | End cycle, log as budget-exceeded, start fresh |
-| Cycle timeout (10 min) | Kernel kills cycle, log as failed, start fresh |
-| Hypothesis missing after retry | Log as failed, start fresh |
-| loop_advance_stage called with wrong stage | Return error, do not advance |
-| Any function error | Return error to LLM — LLM retries, works around, or moves on |
+- Written by `reflection_write_hypothesis` → `session/hypothesis.json`
+- Required by `loop_advance_stage` (hard gate from REFLECT)
+- Persists through EVOLVE and EVAL within the same cycle
+- **Archived by `loop_end_cycle`** to `memory/evolution_records/hyp-cycle{N}.json` with score delta
+- **Deleted from session** at cycle end — never persists across cycles
 
-A single bad cycle never stops evolution.
+This means: at the start of REFLECT, there is NO active hypothesis from the previous cycle. The LLM sees archived outcomes (via the system prompt block) but must write a fresh hypothesis.
+
+---
+
+## Crash Recovery
+
+If `loop_state.json` shows a non-null stage when `loop_start` is called, a crash is detected. `loop_start` attempts to rollback by reading `snapshot_id` from `session/evolution_target.json` (written by `forge_snapshot`). If no snapshot_id is present, no rollback occurs — evolution continues from the next cycle.
 
 ---
 
@@ -185,31 +108,17 @@ A single bad cycle never stops evolution.
 
 | File | Purpose |
 |------|---------|
-| `state/loop_state.json` | Current cycle, stage, mode, started_at, total_cycles_completed |
-| `state/loop_definitions.json` | Stage sequences and directives (evolvable) |
-
-Seed state for `loop_state.json`:
-```json
-{"cycle": 0, "stage": null, "mode": "evolution", "cycle_started_at": null, "total_cycles_completed": 0}
-```
+| `session/loop_state.json` | Current cycle, stage, mode, started_at, total_cycles_completed |
+| `session/current_cycle.json` | Authoritative cycle number |
+| `session/evolution_target.json` | Current target skill, category, approach, snapshot_id |
 
 ---
 
 ## Rules
 
-1. **Block 4 of the system prompt must contain actual content.** If `context_load` returns an empty `content` field, log a warning and proceed — but REFLECT will be working blind.
-2. **The hypothesis gate is non-negotiable.** EVOLVE does not start without `session/hypothesis.json`.
-3. **Cycle counter is the authoritative state.** Always read from `loop_state.json`, never infer from memory record counts.
-4. **commands/pending.json is processed between cycles only.** Commands do not interrupt a running cycle (except `pause`).
-5. **Session is cleared at cycle end.** Nothing in `session/` persists across cycles. Everything worth keeping must be written to Memory.
-
----
-
-## Seed Limitations
-
-- No dynamic stage injection — stages are fixed sequences at seed.
-- Conversation history is held in memory only — a kernel crash loses the current cycle.
-- No partial cycle resume — crashed cycles restart from scratch.
-
+1. **Never skip `loop_end_cycle`** — it archives the hypothesis and clears session. If the LLM ends without calling it, `agent_loop.py`'s safety net calls it automatically.
+2. **Hypothesis gate is enforced in code** — `loop_advance_stage` returns an error if `session/hypothesis.json` is missing when advancing from REFLECT.
+3. **`hypothesis.json` is not kept across cycles** — it is archived then deleted by `loop_end_cycle`. Each cycle starts fresh.
+4. **Cycle counter lives in `session/current_cycle.json`** — do not infer it from evolution record counts.
 
 ---

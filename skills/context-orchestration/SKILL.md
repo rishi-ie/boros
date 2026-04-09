@@ -1,77 +1,75 @@
 # Context Orchestration
 
-You control exactly what Boros reads. Boros relies explicitly on what you deliver to form its working knowledge of the universe prior to generating its cognition.
+You load and assemble the working context that gets injected into the system prompt at cycle start. You write a context manifest to `session/context_manifest.json` and return its contents.
 
 ---
 
 ## Your Role
 
-You implement a "Lean, OS-Style" loader. Unlike older "Fat-Context" systems that mathematically force-feed thousands of lines of evolution/history logs indiscriminately down an LLM's throat, your objective is to preserve the "Lost-in-the-Middle" performance of cutting-edge models (like Claude 3.5 Sonnet / GPT-4o) by keeping the Prompt pristine and nearly empty. 
-
-You execute this via a tight **Working Memory Core** augmented by an automated **Associative Whisper**.
+You consolidate the memory sources Boros needs for the current cycle into one place. The system prompt in `agent_loop.py` builds its blocks from multiple sources — you are responsible for the memory-specific portion: recent evolution records, recent experiences, recent scores, the active hypothesis, and high-water marks.
 
 ---
 
-## The Recipe
+## What You Actually Load
 
-For any cycle initiation, you inject exactly this structure (using ~1,500 - 3,000 tokens maximum):
+When `context_load` is called:
 
-1. **Identity Block**: Loaded raw from Identity `state/identity.json`. Immutable and anchored.
-2. **Current Mode & Task Summary**: Reads Mode Controller and the active line from Mission Control's queue.
-3. **Latest Eval Scores**: A brief top-line summary of `world_model` progress, giving Boros an instant performance delta.
-4. **The Scratchpad (Whiteboard)**: You parse the `Scratchpad` state block and pin it directly to the end of the context so Boros never loses focus of its internal variables and "files-to-remember" pointers.
+1. **Recent evolution records** — last 5 files from `memory/evolution_records/*.json`, sorted by mtime. Includes applied proposals, rejected proposals, and hypothesis outcome archives.
+2. **Recent experiences** — last 5 files from `memory/experiences/exp-*.json`, sorted by mtime. Written by `memory_commit_archival`.
+3. **Recent scores** — last 5 lines from `memory/score_history.jsonl`.
+4. **Active hypothesis** — `session/hypothesis.json` if it exists (cleared at cycle end after archival).
+5. **High-water marks** — `skills/eval-bridge/state/high_water_marks.json`.
 
-*(Notice the massive absence of History Logs, Evolution records, Experience files, etc. That 190,000 token space is deliberately kept empty to afford Boros limitless thought capability when examining raw system memory or code dumps).*
-
----
-
-## The Associative Whisper (Hybrid Recall)
-
-Because Boros operates completely autonomously without fat context, it runs the risk of "amnesia" (forgetting what it did in Cycle 45 by Cycle 48) unless the LLM manually writes a `memory_page_in` tool call. 
-
-To give Boros human-like associative recall without the bloat, you implement an automated "Whisper" injection function:
-
-1. You read the current Mission/Task target (e.g., `"Need to edit reasoning_architecture"` or `"Fixing the unhandled Exception in tool_terminal"`).
-2. You run an invisible, background Semantic DB search via `memory_search_semantic`.
-3. You take the Top 1–3 most relevant `evolution_records` or `experience_logs`.
-4. You compress them down to a tiny 300 token `[Whisper]`.
-5. You append them right below the `Latest Eval Scores` before locking the Context.
-
-"Whispers" provide Boros with instantaneous, highly relevant intuition ("Ah, I tried to edit this reasoning logic 4 cycles ago and it crashed with a Recursion Error") directly within the lean context. 
+The assembled manifest is saved to `session/context_manifest.json` and returned.
 
 ---
 
 ## Functions
 
-### context_load(cycle, mode, manifest_only=false)
+### context_load()
 
-Gathers all context for the current cycle. If `manifest_only` is false, it returns the aggregated string content ready for injection.
+Loads all context sources listed above. Returns the manifest as a dict.
 
 ```
+params: {}   ← no parameters
 → {
-    "status": "ok", 
-    "loaded": dict, 
-    "manifest": dict, 
-    "content": str
+    "status": "ok",
+    "loaded": true,
+    "manifest_keys": ["evolution_records", "recent_experiences", "recent_scores", "hypothesis", "high_water_marks"],
+    "content": {
+        "evolution_records": [...],
+        "recent_experiences": [...],
+        "recent_scores": [...],
+        "hypothesis": {...} | null,
+        "high_water_marks": {...}
+    }
   }
 ```
 
-The `content` key provides the physical textual strings formatted into `=== SECTION ===` headers for system prompt injection.
+Note: `content` is a dict, not a formatted string. The system prompt in `agent_loop.py` handles formatting.
 
 ### context_get_manifest()
 
-Returns just the JSON manifest dictionary outlining what is currently pinned to the Working Memory Core.
+Returns the saved manifest from `session/context_manifest.json` without re-loading from disk.
 
 ```
-→ {"status": "ok", "manifest": dict}
+→ {"status": "ok", ...manifest dict...}
 ```
 
 ---
 
-## Technical Constraints
+## What Is NOT Implemented
 
-- Under no circumstances does Context Orchestration load raw `.py` chunks or external documentation into the Prompt automatically. Boros MUST pull that weight using independent tool commands.
-- The entire assembled string is passed to `Skill Router` to be prefixed before the tool definitions.
+- **Associative Whisper / semantic search** — not implemented. Use `memory_search_sql` manually if you need semantic retrieval.
+- **Identity block, mode/task summary injection** — handled by `agent_loop.py`'s `build_system_prompt()`, not by this skill.
+- **Formatted `=== SECTION ===` string output** — content is returned as a raw dict, not a formatted string.
 
+---
+
+## Rules
+
+1. **Call `context_load` at the start of REFLECT** — before analyzing scores or writing a hypothesis. This ensures `session/context_manifest.json` is current.
+2. **Experiences are read from `memory/experiences/exp-*.json`** — individual files written by `memory_commit_archival`. Not from `experiences.jsonl` (that file does not exist).
+3. **Evolution records include hypothesis outcomes** — after Day 1 fixes, `loop_end_cycle` archives each hypothesis to `memory/evolution_records/hyp-cycle{N}.json`. These appear in context so you can see what was tried and what the outcome was.
 
 ---

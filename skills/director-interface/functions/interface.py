@@ -73,7 +73,10 @@ class DirectorInterface:
             text = text.replace('\n', ' ')
             return escape(text[:max_len] + ("..." if len(text) > max_len else "")), False
 
-        if msg.startswith("[CYCLE]"):
+        if msg.startswith("[STATUS]"):
+            text = escape(msg[8:].strip())
+            print_formatted_text(HTML(f"<b><ansiwhite>▸ {text}</ansiwhite></b>"))
+        elif msg.startswith("[CYCLE]"):
             clean_msg = escape(msg.replace('[CYCLE]', '').strip())
             print_formatted_text(HTML(f"\n<b><ansimagenta>🔄 {clean_msg}</ansimagenta></b>"))
         elif msg.startswith("[ERROR]"):

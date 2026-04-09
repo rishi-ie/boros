@@ -1,6 +1,22 @@
 
 import os, json, glob, time
 
+_RESULTS_KEEP = 10  # how many raw result files to retain in eval-generator/shared/results/
+
+def _prune_old_results(results_dir: str):
+    """Keep only the most recent _RESULTS_KEEP result files. Older ones are already in
+    score_history.jsonl and evals/scores/ so they can be safely deleted."""
+    try:
+        files = sorted(glob.glob(os.path.join(results_dir, "*.json")),
+                       key=os.path.getmtime, reverse=True)
+        for old in files[_RESULTS_KEEP:]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
 def _get_world_model_version(boros_dir: str) -> str:
     """Return version string from world_model.json for tagging score history entries."""
     try:
@@ -39,6 +55,18 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
         with open(score_hist, "a") as f:
             f.write(json.dumps(entry) + "\n")
 
+    def _copy_to_evals_scores(result_data):
+        """Mirror result to evals/scores/ so agent_loop.py prompt injection works."""
+        try:
+            eval_scores_dir = os.path.join(boros_dir, "evals", "scores")
+            os.makedirs(eval_scores_dir, exist_ok=True)
+            eval_id_key = result_data.get("eval_id", result_data.get("request_id", "unknown"))
+            dest = os.path.join(eval_scores_dir, f"{eval_id_key}.json")
+            with open(dest, "w") as f:
+                json.dump(result_data, f, indent=2)
+        except Exception as e:
+            print(f"[eval_read_scores] WARNING: could not mirror to evals/scores/: {e}")
+
     if eval_id:
         # Strip prefixes to handle LLM hallucinating req- vs eval- prefixes
         raw_id = eval_id.replace("req-", "").replace("eval-", "")
@@ -52,6 +80,7 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
                         ev_raw = result.get("eval_id", "").replace("req-", "").replace("eval-", "")
                         if raw_id == req_raw or raw_id == ev_raw:
                             _append_to_history(result)
+                            _copy_to_evals_scores(result)
                             return {"status": "ok", "scores": result.get("scores", {}), "composite": result.get("composite", 0), "result": result}
                 except Exception:
                     pass
@@ -93,6 +122,8 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
                             pass
                     
                     _append_to_history(latest)
+                    _copy_to_evals_scores(latest)
+                    _prune_old_results(results_dir)
                     return {
                         "status": "ok",
                         "scores": latest.get("scores", {}),

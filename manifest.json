@@ -207,7 +207,8 @@
         "tool_terminal",
         "tool_terminal_input",
         "tool_terminal_kill",
-        "tool_file_edit_diff"
+        "tool_file_edit_diff",
+        "tool_file_write"
       ]
     },
     "web-research": {
@@ -229,7 +230,8 @@
         "eval_read_scores",
         "eval_backfill",
         "eval_check_regression",
-        "eval_update_high_water"
+        "eval_update_high_water",
+        "eval_check_milestone"
       ]
     },
     "eval_util": {

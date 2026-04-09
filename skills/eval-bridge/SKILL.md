@@ -1,124 +1,109 @@
 # Eval Bridge
 
-You are the only connection between Boros and the external Eval Generator. All communication is file-based. You trigger evaluations, receive scores, backfill evolution records, check regressions, and maintain high-water marks.
+You are the only connection between Boros and the external Eval Generator. All communication is file-based. You trigger evaluations, receive scores, check regressions, advance milestones, and maintain high-water marks.
 
 ---
 
 ## Your Role
 
-You are active during **EVAL** only. The Eval Generator is a completely separate process. You communicate with it by writing and reading files in `eval-generator/shared/`. You never call it directly.
+You are active during **EVAL** and at **cycle end**. The Eval Generator is a completely separate process running in its own terminal. You communicate with it by writing request files and reading result files in `eval-generator/shared/`. You never call it directly.
 
 ---
 
 ## Functions
 
-### eval_request()
+### eval_request(cycle, categories?)
 
-Triggers an evaluation cycle.
-
-Steps:
-1. Write request file to `eval-generator/shared/requests/eval-{cycle:03d}-{uuid8}.json`
-2. Poll `eval-generator/shared/results/` every 10 seconds for a matching result file
-3. Timeout: 30 minutes. If no result arrives, return error.
-
-Request file schema: `{"cycle": int, "timestamp": "ISO-8601", "request_id": str}`
+Writes a request file to `eval-generator/shared/requests/` and returns immediately with a `request_id`. It does **not** poll for results — call `eval_read_scores(eval_id=<request_id>)` separately to wait for and retrieve the result.
 
 ```
+params: {"cycle": int, "categories": [str, ...]}   ← categories is optional; defaults to all
 → {"status": "ok", "request_id": str}
-→ {"status": "error", "error": "timeout after 30 minutes"}
 ```
 
-On timeout: log the failure via director_log, return error. The cycle continues to loop_end_cycle — a missing eval is logged but does not halt evolution.
+### eval_read_scores(eval_id?)
 
-### eval_read_scores()
+Reads evaluation scores. Two modes:
 
-Reads the latest scores from the result file. **Before returning, synchronously appends to `memory/score_history.jsonl`.**
+- **With `eval_id`**: Polls `eval-generator/shared/results/` every 5 seconds for up to 5 minutes waiting for the result matching that request_id. Returns immediately when found.
+- **Without `eval_id`**: Returns the most recent available result without waiting.
 
-```
-→ {"status": "ok", "scores": {"reasoning_architecture": 0.74, ...}, "composite": float, "eval_id": str}
-```
-
-Score history entry written before returning:
-```json
-{
-  "eval_id": "eval-042",
-  "timestamp": "ISO-8601",
-  "cycle": 42,
-  "scores": {"reasoning_architecture": 0.74},
-  "composite": 0.74,
-  "deltas": {"reasoning_architecture": 0.03},
-  "plateau_flag": false,
-  "cycles_since_improvement": {"hypothesis_engine": 4}
-}
-```
-
-`deltas` = post - pre per category. Empty dict `{}` on first eval. `plateau_flag` = true if composite is unchanged for 3+ consecutive evals.
-
-### eval_backfill(scores)
-
-Fills `post_scores` on all pending evolution records (records where `post_scores` is null). Computes delta per category.
+On success: appends a full entry to `memory/score_history.jsonl`, mirrors the result to `evals/scores/{eval_id}.json`, and prunes old files from `eval-generator/shared/results/` (keeps last 10).
 
 ```
-params: {"scores": dict}
-→ {"status": "ok", "records_updated": int}
+→ {"status": "ok", "scores": {"reasoning": 0.74, ...}, "composite": float}
+→ {"status": "error", "message": "Timeout waiting for evaluation results for <id>"}
 ```
 
-Scans `memory/evolution_records/` for records with `post_scores: null`. For each: reads `pre_scores`, computes delta, writes `post_scores` and `delta` via `memory_update`.
+### eval_backfill(cycle)
 
-### eval_check_regression(scores)
-
-Compares current scores against high-water marks. Triggers rollback if any category drops more than the **adaptive threshold** below its best-ever score.
-
-**Adaptive regression threshold:**
-
-| Cycles | Threshold | Rationale |
-|--------|-----------|-----------|
-| 1–10   | 0.05 | Experimentation phase — variance is expected; only roll back significant drops |
-| 11–30  | 0.03 | Moderate — scores are stabilizing; tighten scrutiny |
-| 31+    | 0.02 | Strict — compounding record is dense; small regressions are real signal |
+Backfills `memory/score_history.jsonl` from `eval-generator/shared/results/` for a specific cycle. Only adds entries not already present (deduplication by eval_id). Writes full entries with eval_id, cycle, timestamp, scores, and composite — not bare score dicts.
 
 ```
-params: {"scores": dict}
+params: {"cycle": int}
+→ {"status": "ok", "records_backfilled": int}
+```
+
+### eval_check_regression(current_scores)
+
+Compares `current_scores` against `skills/eval-bridge/state/high_water_marks.json`. Uses an **adaptive threshold** that tightens as Boros matures:
+
+| Cycles | Threshold |
+|--------|-----------|
+| 1–10   | 0.05      |
+| 11–30  | 0.03      |
+| 31+    | 0.02      |
+
+**If regression detected**: automatically calls `evolve_rollback` using the `snapshot_id` from `session/evolution_target.json` (written there by `forge_snapshot`). Logs the auto-rollback to `memory/evolution_records/rollback-cycle{N}.json`.
+
+```
+params: {"current_scores": {"reasoning": 0.62, ...}}
 → {
     "status": "ok",
-    "regressions": [{"category": str, "current": float, "high_water": float, "drop": float, "threshold": float}],
-    "rollback_triggered": bool,
-    "threshold_used": float
+    "has_regression": bool,
+    "regressions": {"reasoning": {"current": 0.62, "high_water": 0.74, "delta": -0.12}},
+    "improvements": {...},
+    "threshold_used": float,
+    "auto_rollback": {"status": "ok", ...} | null,
+    "message": str
   }
 ```
 
-The `threshold_used` field is logged in the regression record so future analysis can account for which threshold was in effect.
-
-If any category is below `high_water - threshold`, calls `evolve_rollback` on the most recent applied proposal and logs the event.
-
-If `auto_pause_on_regression` is set to true in `config.json`, also writes `commands/paused.json` to pause after this cycle.
-
 ### eval_update_high_water(scores)
 
-Updates `state/high_water_marks.json` with new bests. After updating, triggers a system snapshot and git tag.
+Updates `skills/eval-bridge/state/high_water_marks.json` with any new category bests. High-water marks never decay — scores must strictly exceed the current mark to update.
 
 ```
-params: {"scores": dict}
-→ {"status": "ok", "updated": [list of categories that set new records]}
+params: {"scores": {"reasoning": 0.74, ...}}
+→ {"status": "ok", "updated_categories": {"reasoning": {"old": 0.71, "new": 0.74}}}
 ```
 
-System snapshot: copies full `boros/` directory (minus `snapshots/` itself) to `snapshots/eval-{id}/`.
+### eval_check_milestone()
 
-Git tag: `eval-{id}-score-{composite}`. Skipped silently if git is not initialized.
+Checks if any category has cleared its current milestone and should advance. Reads the last N score history entries per category, compares against the milestone's `unlock_score` and `unlock_consecutive` requirements, and if met, increments `current_milestone` in `world_model.json`. Logs every advancement to `memory/evolution_records/milestone-{cat}-L{n}.json`.
+
+Called automatically by `loop_end_cycle` — you can also call it manually after reading scores.
+
+```
+→ {
+    "status": "ok",
+    "advanced": {"web_search": {"from": 0, "to": 1, "new_milestone_name": "Multi-Source Validation"}},
+    "category_status": {"reasoning": {"milestone": 0, "consecutive": 1, "needed": 2, "unlock_score": 0.65}},
+    "message": str
+  }
+```
 
 ---
 
 ## Correct EVAL Flow
 
-Call these in order:
-
 ```
-1. eval_request()                      ← triggers eval, polls for result
-2. eval_read_scores()                  ← reads scores, writes to score_history.jsonl
-3. eval_backfill(scores)               ← fills post_scores on pending evolution records
-4. eval_check_regression(scores)       ← rollback if regression detected (adaptive threshold)
-5. eval_update_high_water(scores)      ← update marks, snapshot, git tag
-6. loop_end_cycle()                    ← end the cycle
+1. eval_request(cycle=N, categories=["web_search"])   ← submit request, get request_id
+2. eval_read_scores(eval_id=<request_id>)             ← wait for result, writes score_history
+3. eval_check_regression(current_scores=<scores>)     ← auto-rollbacks if regression
+4. eval_update_high_water(scores=<scores>)            ← update personal bests
+   [loop_end_cycle calls eval_check_milestone]        ← auto-called at cycle end
+5. loop_end_cycle()                                   ← archives hypothesis, clears session
 ```
 
 ---
@@ -127,34 +112,17 @@ Call these in order:
 
 | File | Purpose |
 |------|---------|
-| `state/high_water_marks.json` | Best-ever score per category. Never decays. |
-
-Seed state: all categories at 0.0.
-
-High-water marks reset only when the Director changes a category's definition in `world_model.json`.
+| `state/high_water_marks.json` | Best-ever score per category. Never decays. Synced from world_model.json at each cycle start. |
+| `state/milestone_progress.json` | Consecutive clear counter per category for milestone advancement. |
 
 ---
 
 ## Rules
 
-1. **eval_read_scores MUST write to score_history.jsonl before returning.** Synchronous write, not deferred. If the write fails, return an error — do not return scores without writing them.
-2. **Eval Generator must already be running.** The kernel spawns it at boot and waits for `eval-generator/shared/.ready`. If `.ready` is absent, boot halts before the loop starts.
-3. **Timeout is not a crash.** A 30-minute timeout means the eval is skipped for this cycle. Log it, continue to loop_end_cycle. One missing eval does not stop evolution.
-4. **Regression check triggers automatic rollback.** This is the only automatic rollback in the system. All other rollbacks are explicit Director commands.
-5. **Adaptive threshold — read cycle from loop_get_state().** Always compute the correct threshold for the current cycle before checking regressions. Log the threshold used.
-6. **High-water marks never decay.** They only go up. A score must strictly exceed the current mark to update it.
-7. **eval_backfill uses memory_update, not direct file writes.** Route all record updates through the Memory skill.
-
----
-
-## Seed Limitations
-
-- Polling interval is fixed at 10 seconds — no exponential backoff.
-- System snapshot is a full directory copy — not incremental, not compressed.
-- No partial eval results — it's all-or-nothing per request.
-- git tag is best-effort — silently skipped if git is not initialized.
-- `cycles_since_improvement` in score_history is computed by linear scan — no index.
-- Adaptive threshold is a simple step function — future evolution can replace with a smooth decay curve fitted to observed variance.
-
+1. **Always call `eval_read_scores` with the `eval_id` from `eval_request`** — otherwise you may read a stale result from a previous cycle.
+2. **eval_check_regression auto-rollbacks in code** — you do not need to call `evolve_rollback` manually after it. Check the `auto_rollback` field in the response to confirm.
+3. **`snapshot_id` must exist in `session/evolution_target.json`** for auto-rollback to work. `forge_snapshot` writes it there — always call `forge_snapshot` before modifying any skill.
+4. **High-water marks never decay.** They only go up.
+5. **milestone advancement writes to world_model.json** — the next cycle will automatically use harder tasks for that category.
 
 ---

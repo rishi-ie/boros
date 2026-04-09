@@ -86,6 +86,7 @@ TOOL_SCHEMAS = {
     "tool_terminal_input": _s("tool_terminal_input", "Send stdin input to a background job.", {"job_id": {"type": "string"}, "text": {"type": "string"}}, ["job_id", "text"]),
     "tool_terminal_kill": _s("tool_terminal_kill", "Terminate a background job.", {"job_id": {"type": "string"}}, ["job_id"]),
     "tool_file_edit_diff": _s("tool_file_edit_diff", "Apply surgical find-and-replace patches to a file. Each chunk replaces the first occurrence of target_content with replacement_content.", {"target_file": {"type": "string"}, "replacement_chunks": {"type": "array", "items": {"type": "object", "properties": {"target_content": {"type": "string"}, "replacement_content": {"type": "string"}}, "required": ["target_content", "replacement_content"]}}}, ["target_file", "replacement_chunks"]),
+    "tool_file_write": _s("tool_file_write", "Write content to a file, creating it if it doesn't exist. Use this to create new Python skill functions from scratch. Python files are syntax-checked before confirming.", {"path": {"type": "string"}, "content": {"type": "string"}}, ["path", "content"]),
 
 
 
@@ -98,6 +99,7 @@ TOOL_SCHEMAS = {
     "eval_request": _s("eval_request", "Submit an evaluation request to the Eval Generator sandbox. Returns request_id.", {"cycle": {"type": "integer"}, "categories": {"type": "array", "items": {"type": "string"}}}, ["cycle"]),
     "eval_read_scores": _s("eval_read_scores", "Read the latest evaluation scores. Checks eval-generator results directory.", {"eval_id": {"type": "string", "description": "Optional specific eval ID to read"}}),
     "eval_backfill": _s("eval_backfill", "Backfill missing scores for a given cycle.", {"cycle": {"type": "integer"}}, ["cycle"]),
-    "eval_check_regression": _s("eval_check_regression", "Compare current scores against high-water marks. Returns regression status.", {"current_scores": {"type": "object"}, "threshold": {"type": "number", "default": 0.05}}, ["current_scores"]),
+    "eval_check_regression": _s("eval_check_regression", "Compare current scores against high-water marks. Auto-rollbacks on regression.", {"current_scores": {"type": "object"}}, ["current_scores"]),
     "eval_update_high_water": _s("eval_update_high_water", "Update high-water marks if current scores exceed them.", {"scores": {"type": "object"}}, ["scores"]),
+    "eval_check_milestone": _s("eval_check_milestone", "Check if any category has cleared its current milestone and advance world_model.json if so. Call after each eval.", {}),
 }

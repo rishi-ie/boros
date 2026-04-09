@@ -52,18 +52,30 @@ class AgentLoop:
                     wm_lines = ["## World Model Categories (Your Evolution Targets)"]
                     wm_lines.append("These are the capabilities you MUST evolve toward. Every evolution cycle must target one of these.\n")
                     for cat_id, cat_data in categories.items():
-                        name = cat_data.get("name", cat_id)
-                        desc = cat_data.get("description", "")
+                        name    = cat_data.get("name", cat_id)
+                        desc    = cat_data.get("description", "")
                         related = cat_data.get("related_skills", [])
-                        anchors = cat_data.get("anchors", [])
-                        weight = cat_data.get("weight", 1.0)
-                        wm_lines.append(f"### {name} (`{cat_id}`, weight={weight})")
+                        weight  = cat_data.get("weight", 1.0)
+
+                        # Resolve active milestone (or fall back to flat fields)
+                        milestones     = cat_data.get("milestones", [])
+                        current_m_idx  = cat_data.get("current_milestone", 0)
+                        if milestones and current_m_idx < len(milestones):
+                            m       = milestones[current_m_idx]
+                            anchors = m.get("anchors", cat_data.get("anchors", []))
+                            rubric  = m.get("rubric",  cat_data.get("rubric", {}))
+                            m_label = f" | Milestone {current_m_idx}: {m.get('name','?')} (difficulty={m.get('difficulty',5)}, unlock@{m.get('unlock_score',0.75)})"
+                        else:
+                            anchors = cat_data.get("anchors", [])
+                            rubric  = cat_data.get("rubric", {})
+                            m_label = ""
+
+                        wm_lines.append(f"### {name} (`{cat_id}`, weight={weight}{m_label})")
                         wm_lines.append(f"{desc}\n")
                         if related:
                             wm_lines.append(f"**Related skills to evolve**: {', '.join(related)}")
                         if anchors:
-                            wm_lines.append(f"**Anchors**: {'; '.join(anchors[:3])}")
-                        rubric = cat_data.get("rubric", {})
+                            wm_lines.append(f"**Current milestone anchors**: {'; '.join(anchors[:3])}")
                         if rubric.get("level_4"):
                             wm_lines.append(f"**Level 4 Target**: {rubric['level_4']}")
                         wm_lines.append("")
@@ -101,7 +113,41 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 6. Active hypothesis (Task Binding)
+        # 6. Past hypothesis outcomes — DO NOT REPEAT FAILED APPROACHES
+        hyp_records_dir = self.boros_root / "memory" / "evolution_records"
+        if hyp_records_dir.exists():
+            try:
+                hyp_files = sorted(
+                    hyp_records_dir.glob("hyp-cycle*.json"),
+                    key=lambda f: f.stat().st_mtime
+                )[-10:]
+                if hyp_files:
+                    hyp_lines = ["## Previous Evolution Attempts (DO NOT REPEAT FAILED APPROACHES)"]
+                    hyp_lines.append("Study these outcomes before writing your hypothesis. Never repeat an approach that regressed or was neutral.\n")
+                    for hf in hyp_files:
+                        try:
+                            h = json.loads(hf.read_text())
+                            cycle_n   = h.get("cycle", "?")
+                            target    = h.get("target_skill", "?")
+                            rationale = h.get("rationale", "")[:120]
+                            outcome   = h.get("actual_outcome", "unknown").upper()
+                            before    = h.get("score_before", {})
+                            after     = h.get("score_after", {})
+                            score_str = ""
+                            if before and after:
+                                for cat in set(list(before.keys()) + list(after.keys())):
+                                    b = before.get(cat, "?")
+                                    a = after.get(cat, "?")
+                                    score_str += f" {cat}: {b}→{a}"
+                            hyp_lines.append(f"- Cycle {cycle_n} | {target} | {outcome} |{score_str}")
+                            hyp_lines.append(f"  Rationale: {rationale}")
+                        except Exception:
+                            pass
+                    parts.append("\n".join(hyp_lines))
+            except Exception:
+                pass
+
+        # 6b. Active hypothesis (Task Binding)
         hyp_file = self.boros_root / "session" / "hypothesis.json"
         if hyp_file.exists():
             try:
@@ -170,6 +216,79 @@ class AgentLoop:
     # Tool Dispatch
     # ────────────────────────────────────────────
 
+    def _describe_tool_call(self, name, inp):
+        """Return a short human-readable sentence describing what this tool call is doing."""
+        def _t(text, limit=70):
+            return text[:limit] + ("…" if len(text) > limit else "")
+
+        table = {
+            "loop_start":               lambda p: "Starting a new evolution cycle",
+            "loop_advance_stage":       lambda p: f"Stage complete — moving to next stage",
+            "loop_end_cycle":           lambda p: "Cycle done — saving high-water marks",
+            "loop_get_state":           lambda p: "Checking current loop state",
+            "eval_request":             lambda p: f"Submitting evaluation for: {', '.join(p.get('categories', ['all categories']))}",
+            "eval_read_scores":         lambda p: "Waiting for evaluation results…" if p.get("eval_id") else "Reading latest scores",
+            "eval_check_regression":    lambda p: "Checking if this change improved or hurt the score",
+            "eval_update_high_water":   lambda p: "Updating personal-best score records",
+            "eval_backfill":            lambda p: "Backfilling historical scores",
+            "reflection_analyze_trace": lambda p: "Analyzing score history to find the weakest capability",
+            "reflection_write_hypothesis": lambda p: f"Hypothesis: {_t(p.get('rationale', '?'))}",
+            "reflection_read_hypothesis":  lambda p: "Reading the active hypothesis",
+            "evolve_orient":            lambda p: "Finding which skill to target based on current scores",
+            "evolve_set_target":        lambda p: f"Targeting '{p.get('target', '?')}' skill for improvement",
+            "evolve_propose":           lambda p: f"Packaging change into a proposal: {_t(p.get('description', '?'))}",
+            "evolve_apply":             lambda p: f"Applying approved proposal and hot-reloading",
+            "evolve_rollback":          lambda p: f"Rolling back '{p.get('target', '?')}' — score regressed",
+            "evolve_history":           lambda p: "Reading past evolution attempts",
+            "evolve_modify_loop":       lambda p: f"Proposing loop change: {_t(p.get('modification', '?'))}",
+            "evolve_create_skill":      lambda p: f"Creating a new skill: {p.get('skill_name', '?')}",
+            "forge_snapshot":           lambda p: f"Snapshotting '{p.get('target', '?')}' in case rollback is needed",
+            "forge_read_skill_md":      lambda p: f"Reading '{p.get('skill_name', '?')}' skill definition",
+            "forge_edit_skill_md":      lambda p: f"Editing '{p.get('skill_name', '?')}' instructions (section: {p.get('section_name', p.get('section', '?'))})",
+            "forge_validate":           lambda p: f"Checking syntax of '{p.get('target', p.get('skill_name', '?'))}'",
+            "forge_test_suite":         lambda p: f"Running tests on '{p.get('skill_name', '?')}'",
+            "forge_apply_diff":         lambda p: f"Applying patch to: {p.get('target_file', '?')}",
+            "forge_rollback":           lambda p: f"Restoring snapshot for '{p.get('target', '?')}'",
+            "forge_create_skill":       lambda p: f"Scaffolding new skill: {p.get('skill_name', '?')}",
+            "forge_invoke":             lambda p: f"Testing function: {p.get('function_name', '?')}",
+            "review_proposal":          lambda p: "Sending proposal to independent review board for approval",
+            "review_history":           lambda p: "Reading past review decisions",
+            "review_criteria_update":   lambda p: "Updating review board criteria",
+            "tool_file_edit_diff":      lambda p: f"Patching: {p.get('target_file', '?')}",
+            "tool_file_write":          lambda p: f"Creating: {p.get('path', '?')}",
+            "tool_terminal":            lambda p: f"Running: {_t(str(p.get('command', '?')), 60)}",
+            "tool_terminal_input":      lambda p: "Sending input to terminal process",
+            "tool_terminal_kill":       lambda p: "Stopping background terminal process",
+            "tool_apply_patch":         lambda p: f"Applying patch to: {p.get('target_file', '?')}",
+            "reason_decompose":         lambda p: f"Breaking down: {_t(p.get('problem', '?'))}",
+            "reason_evaluate_options":  lambda p: "Scoring candidate approaches against criteria",
+            "reason_check_logic":       lambda p: "Checking the hypothesis for logical gaps",
+            "reason_generate_plan":     lambda p: "Generating a step-by-step execution plan",
+            "memory_page_in":           lambda p: f"Loading memory: {p.get('source', 'scores')}",
+            "memory_page_out":          lambda p: "Saving data to memory",
+            "memory_commit_archival":   lambda p: "Recording this cycle's outcome to long-term memory",
+            "memory_search_sql":        lambda p: f"Searching memory: {_t(p.get('query', '?'))}",
+            "research_search_engine":   lambda p: f"Searching the web for: \"{_t(p.get('query', '?'))}\"",
+            "research_browse":          lambda p: f"Reading: {_t(p.get('url', '?'), 60)}",
+            "research_archive_source":  lambda p: f"Archiving source: {_t(p.get('url', '?'), 60)}",
+            "context_load":             lambda p: "Loading active context into memory",
+            "context_get_manifest":     lambda p: "Reading the context manifest",
+            "router_get_tools":         lambda p: "Getting available tools for this stage",
+            "router_get_budget":        lambda p: "Checking token/call budget",
+            "router_manifest":          lambda p: "Reading the skill manifest",
+            "mode_get":                 lambda p: "Reading current operating mode",
+            "mode_set":                 lambda p: f"Switching mode to: {p.get('mode', '?')}",
+            "generate_evaluation_artifact": lambda p: f"Writing eval artifact: {p.get('artifact_name', '?')}",
+        }
+
+        fn = table.get(name)
+        if fn is None:
+            return None
+        try:
+            return fn(inp)
+        except Exception:
+            return None
+
     def dispatch_tool(self, name, params):
         """Dispatch a tool call to the kernel registry."""
         if name not in self.kernel.registry:
@@ -187,6 +306,13 @@ class AgentLoop:
     # ────────────────────────────────────────────
 
     def run_evolution_cycle(self):
+        # Sync world_model.json → categories.json + high_water_marks.json every cycle
+        # so mid-run edits to world_model.json are picked up without restart
+        try:
+            self.kernel._sync_world_model_state(self.boros_root)
+        except Exception:
+            pass
+
         system = self.build_system_prompt()
         tools = self.build_tools()
 
@@ -247,6 +373,10 @@ class AgentLoop:
                         name = block["name"]
                         inp = block.get("input", {})
                         tid = block["id"]
+
+                        _tool_desc = self._describe_tool_call(name, inp)
+                        if _tool_desc:
+                            self.log(f"[STATUS] {_tool_desc}")
 
                         if name == "evolve_propose":
                             desc = inp.get("description", "")
