@@ -86,7 +86,9 @@
         "memory_page_in",
         "memory_page_out",
         "memory_search_sql",
-        "memory_commit_archival"
+        "memory_commit_archival",
+        "memory_kg_write",
+        "memory_kg_query"
       ]
     },
     "skill-router": {
@@ -142,7 +144,8 @@
         "evolve_rollback",
         "evolve_create_skill",
         "evolve_modify_loop",
-        "evolve_history"
+        "evolve_history",
+        "evolve_query_ledger"
       ]
     },
     "meta-evaluation": {

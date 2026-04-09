@@ -28,10 +28,15 @@ def eval_update_high_water(params: dict, kernel=None) -> dict:
         current_hw = high_water.get(cat, 0.0)
         
         if score > current_hw:
-            # Dampen: don't jump to the spike, blend toward it
-            new_hw = current_hw * (1 - ALPHA) + score * ALPHA
+            if current_hw == 0.0:
+                # First time establishing a baseline; no dampening
+                new_hw = score
+            else:
+                # Dampen: don't jump to the spike, blend toward it
+                new_hw = current_hw * (1 - ALPHA) + score * ALPHA
+                
             high_water[cat] = round(new_hw, 4)
-            updated[cat] = {"old": current_hw, "new": high_water[cat], "action": "ema_blend"}
+            updated[cat] = {"old": current_hw, "new": high_water[cat], "action": "baseline" if current_hw == 0.0 else "ema_blend"}
         elif score < current_hw - 0.1:
             # Significantly below mark — allow slow decay
             new_hw = round(max(score, current_hw - DECAY), 4)

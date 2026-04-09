@@ -28,7 +28,7 @@ Intelligence lives in skills, not in the kernel. The kernel is routing. The 15 s
 ### 2. Target What the World Model Tells You
 - Always call `evolve_orient` before choosing what to evolve. It reads your scores, finds your weakest category, and maps it to the skills you should target.
 - Only target skills listed under `related_skills` for your weakest world model category.
-- **Never target:** `eval-bridge`, `loop-orchestrator`, `meta-evaluation`, `mode-controller` — these are infrastructure.
+- **Never target:** `eval-bridge`, `loop-orchestrator`, `meta-evaluation`, `mode-controller`, `context-orchestration`, `skill-router` — these are infrastructure.
 - **Only target** `agent_loop.py` or `kernel.py` if your eval feedback explicitly identifies loop-level failures.
 
 ### 3. Write Real Code
@@ -44,7 +44,9 @@ Never stop after EVOLVE. You must always reach COMMIT.
 - **COMMIT** → record the outcome, update memory
 
 ### 5. Anti-Brute-Force Rule
-If you modified a piece of Python code and it didn't improve the score, **do not modify the same code again**. Step back. Either:
+This rule is **enforced in code**. `evolve_propose` will automatically block any proposal targeting a file that has failed (regressed or been rejected) twice in recent cycles. Do not fight this — work around it by targeting a different file or a different approach.
+
+If you modified a piece of Python code and it didn't improve the score, step back. Either:
 - Try improving the `SKILL.md` semantic layer instead
 - Write a new helper function that adds capability
 - Target a completely different skill
@@ -73,8 +75,10 @@ Scores are on a 0.0–1.0 scale (normalized from the world model's 4-level rubri
 
 - Use `memory_page_in(source="scores")` to load score history at cycle start.
 - Use `memory_page_in(source="experiences")` to load past lessons.
-- Use `memory_commit_archival` at the end of every cycle to record what worked, what didn't, and why. This is how you learn across cycles.
+- Use `memory_commit_archival` at the end of every cycle to record what worked, what didn't, and why. **Required format:** entry must include `"Context:"`, `"Action:"`, and `"Outcome:"` sections with real detail (minimum 100 characters total). Empty templates are rejected.
 - Use `memory_search_sql` to search for past experiences relevant to your current target.
+- Use `evolve_query_ledger` to query your evolution history — every code change, its outcome (improved/regressed/neutral), and the delta. Use `mode="regressions"` to see what failed, `mode="skill_stats"` for per-skill success rates, `mode="file_history"` to see every change to a specific file.
+- Use `memory_kg_write` to record causal relationships (e.g., "skill X caused delta in category Y"). Use `memory_kg_query` to retrieve them. These survive across sessions and build a persistent causal map of what works.
 
 ---
 
@@ -84,7 +88,7 @@ Scores are on a 0.0–1.0 scale (normalized from the world model's 4-level rubri
 - **Never modify `eval-bridge`** — tampering with your own scoring system invalidates your scores.
 - **Never produce cosmetic-only changes** — they waste cycles and will be rejected.
 - **Never stop at EVOLVE** — an unevaluated change has unknown value.
-- **Never ignore a regression** — if your score drops, roll back immediately and try a different approach.
+- **Never ignore a regression** — rollback is **automatic**: `eval_check_regression` runs automatically and restores your code if scores drop. You do not need to call `evolve_rollback` manually. Accept the outcome and learn from it.
 - **Never fabricate tool results** — every tool call must produce real side effects.
 
 ---

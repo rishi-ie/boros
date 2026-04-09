@@ -89,24 +89,24 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     elif after_val is not None:
         outcome = "baseline"
 
-    # ── FIX-07: Automatic regression rollback ────────────────────
+    # ── FIX-07: Read Auto-Rollback Status from eval_check_regression ──
     auto_rollback = None
-    if outcome == "regressed" and snapshot_id and target_skill:
-        if kernel and "forge_rollback" in kernel.registry:
-            try:
-                rollback_result = kernel.registry["forge_rollback"](
-                    {"snapshot_id": snapshot_id, "target": target_skill}, kernel
-                )
-                auto_rollback = {
-                    "snapshot_id": snapshot_id,
-                    "target_skill": target_skill,
-                    "result": rollback_result.get("status", "unknown")
-                }
-                print(f"[AUTO-ROLLBACK] {target_skill} regressed ({delta:+.4f}). "
-                      f"Restored snapshot {snapshot_id}.")
-            except Exception as e:
-                auto_rollback = {"error": str(e)}
-                print(f"[AUTO-ROLLBACK] Failed for {target_skill}: {e}")
+    records_dir = os.path.join(boros_dir, "memory", "evolution_records")
+    rollback_file = os.path.join(records_dir, f"rollback-cycle{cycle}.json")
+    if os.path.exists(rollback_file):
+        try:
+            with open(rollback_file) as f:
+                rb_data = json.load(f)
+            auto_rollback = {
+                "snapshot_id": rb_data.get("snapshot_id"),
+                "target_skill": rb_data.get("skill_name"),
+                "result": "ok"
+            }
+            outcome = "regressed"
+        except Exception as e:
+            print(f"[loop_end_cycle] WARNING: Failed to read rollback data: {e}")
+    elif outcome == "regressed":
+        outcome = "variance_allowed"
 
     # ── FIX-05: Write evolution ledger entry ──────────────────────
     # Read proposal info if available
