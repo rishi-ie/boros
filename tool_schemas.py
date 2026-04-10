@@ -96,4 +96,7 @@ TOOL_SCHEMAS = {
     "eval_check_regression": _s("eval_check_regression", "Compare current scores against high-water marks. Auto-rollbacks on regression.", {"current_scores": {"type": "object"}}, ["current_scores"]),
     "eval_update_high_water": _s("eval_update_high_water", "Update high-water marks if current scores exceed them.", {"scores": {"type": "object"}}, ["scores"]),
     "eval_check_milestone": _s("eval_check_milestone", "Check if any category has cleared its current milestone and advance world_model.json if so. Call after each eval."),
+
+    # ── Eval Utility ──
+    "generate_evaluation_artifact": _s("generate_evaluation_artifact", "Generate a JSON artifact file for evaluation in the eval-generator shared artifacts directory.", {"artifact_name": {"type": "string", "description": "Name for the artifact file"}, "content": {"type": "object", "description": "JSON content to write to the artifact"}}, ["artifact_name", "content"]),
 }
