@@ -30,3 +30,4 @@ eval-generator/logs/*
 
 # Exceptions (keep required directories alive in git)
 !eval-generator/shared/.built
+.openclaude-profile.json
