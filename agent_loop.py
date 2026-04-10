@@ -428,7 +428,7 @@ class AgentLoop:
                         
                         # Deduplicate identical non-polling tool calls
                         sig = (name, json.dumps(inp, sort_keys=True))
-                        is_polling = name in ("eval_read_scores", "tool_terminal_input", "router_get_budget")
+                        is_polling = name in ("eval_read_scores", "tool_terminal_input", "router_get_budget", "eval_request", "tool_terminal")
                         is_duplicate = (sig in executed_tools) and not is_polling
                         
                         if is_duplicate:

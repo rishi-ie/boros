@@ -44,6 +44,12 @@ def evolve_propose(params: dict, kernel=None) -> dict:
 
     # Validate syntax before accepting proposal
     target_to_validate = params.get("target", params.get("skill_name"))
+    # If a full path was passed (e.g. "skills/memory/functions/foo.py"), extract the skill name
+    if target_to_validate:
+        normalized = target_to_validate.replace("\\", "/")
+        parts = normalized.split("/")
+        if len(parts) >= 2 and parts[0] == "skills":
+            target_to_validate = parts[1]
     if target_to_validate and kernel:
         if 'forge_validate' in kernel.registry:
             validation_result = kernel.registry['forge_validate'](

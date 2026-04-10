@@ -6,6 +6,13 @@ def forge_rollback(params: dict, kernel=None) -> dict:
     skill_name = params.get("target", params.get("skill_name", ""))
     snapshot_id = params.get("snapshot_id", "")
 
+    # Normalize: if a full path was passed (e.g. "skills/memory/functions/foo.py"), extract skill name
+    if skill_name:
+        normalized = skill_name.replace("\\", "/")
+        parts = normalized.split("/")
+        if len(parts) >= 2 and parts[0] == "skills":
+            skill_name = parts[1]
+
     if not skill_name or not snapshot_id:
         return {"status": "error", "message": "skill_name and snapshot_id required"}
 

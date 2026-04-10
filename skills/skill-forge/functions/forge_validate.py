@@ -7,6 +7,12 @@ def forge_validate(params: dict, kernel=None) -> dict:
     if not skill_name:
         return {"status": "error", "message": "skill_name required"}
 
+    # Normalize: if a full path was passed (e.g. "skills/memory/functions/foo.py"), extract skill name
+    normalized = skill_name.replace("\\", "/")
+    parts = normalized.split("/")
+    if len(parts) >= 2 and parts[0] == "skills":
+        skill_name = parts[1]
+
     func_dir = os.path.join(boros_dir, "skills", skill_name, "functions")
     if not os.path.isdir(func_dir):
         return {"status": "error", "message": f"Functions dir not found: {func_dir}"}

@@ -35,6 +35,7 @@ class AdaptEngine:
 
         if len(tasks) < min_tasks:
             self.log(f"[ADAPT] Not enough tasks ({len(tasks)}/{min_tasks}) since last adaptation. Skipping.")
+            self._update_last_adapt_timestamp()
             return False
 
         self.log(f"[ADAPT] Analyzing {len(tasks)} tasks...")

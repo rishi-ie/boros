@@ -1,46 +1,49 @@
 import threading
 import time
 import json
-import os
 import re
 import datetime
+import sys
 from pathlib import Path
 from prompt_toolkit import PromptSession, print_formatted_text, HTML
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
+from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
-from rich.align import Align
 
-# Helper to safely escape text for HTML display
+
 def escape(t):
     return str(t).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+
 class DirectorInterface:
     def __init__(self, kernel):
-        self.kernel = kernel
-        self.boros_root = kernel.boros_root
+        self.kernel       = kernel
+        self.boros_root   = kernel.boros_root
         self.pause_requested = False
+        self.verbose      = False
+        self._adapt_thread = None
+        self._console     = Console()
 
-        # Ensure directories
+        # Ensure runtime dirs exist
         self.commands_dir = self.boros_root / "commands"
         self.commands_dir.mkdir(parents=True, exist_ok=True)
         self.pending_file = self.commands_dir / "pending.json"
         if not self.pending_file.exists():
-            with open(self.pending_file, "w") as f:
-                json.dump({"pending": []}, f)
+            self.pending_file.write_text(json.dumps({"pending": []}))
 
-        self.logs_dir = self.boros_root / "logs"
+        self.logs_dir  = self.boros_root / "logs"
         self.logs_dir.mkdir(parents=True, exist_ok=True)
         self.cycles_log = self.logs_dir / "cycles.log"
         if not self.cycles_log.exists():
             self.cycles_log.touch()
 
-        self._adapt_thread = None
+    # ─────────────────────────────────────────────
+    # Log output
+    # ─────────────────────────────────────────────
 
     def log_to_console(self, msg):
-        """Callback for agent loop to print to prompt_toolkit console."""
-        # Log purely to file first
+        # Always persist to file
         try:
             with open(self.cycles_log, "a", encoding="utf-8") as f:
                 f.write(msg + "\n")
@@ -50,84 +53,106 @@ class DirectorInterface:
         if not msg:
             return
 
-        # Prevent previous ansi colors bleeding into rich or breaking prompt toolkit
-        msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(msg))
-        msg = msg.strip()
+        # Quiet mode: suppress raw tool I/O and token counts
+        if not self.verbose:
+            if msg.startswith("[TOOL]") or msg.startswith("[EXEC TOOL]") or msg.startswith("[TOKENS]"):
+                return
 
+        # Strip ANSI escape codes
+        msg = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', str(msg)).strip()
         if not msg:
             return
 
-        def format_result(text, max_len=150):
+        def _fmt_result(text, max_len=150):
             try:
                 data = json.loads(text)
                 if isinstance(data, dict):
                     if data.get("status") == "error" or ("returncode" in data and data.get("returncode", 0) != 0):
-                        err = data.get("error", data.get("stderr", "Unknown error"))
+                        err = data.get("error", data.get("stderr", "error"))
                         return f"<b><ansired>Error:</ansired></b> {escape(str(err).strip()[:max_len])}", True
-                    else:
-                        out = data.get("stdout", data.get("output", data.get("result", "")))
-                        if isinstance(out, (dict, list)):
-                            out = json.dumps(out)
-                        if not out and data.get("status") == "ok":
-                            out = "Success (No output)"
-                        return escape(str(out).strip()[:max_len].replace("\n", " ")), False
+                    out = data.get("stdout", data.get("output", data.get("result", "")))
+                    if isinstance(out, (dict, list)):
+                        out = json.dumps(out)
+                    if not out and data.get("status") == "ok":
+                        out = "ok"
+                    return escape(str(out).strip()[:max_len].replace("\n", " ")), False
             except Exception:
                 pass
-            text = text.replace('\n', ' ')
-            return escape(text[:max_len] + ("..." if len(text) > max_len else "")), False
+            t = text.replace('\n', ' ')
+            return escape(t[:max_len] + ("..." if len(t) > max_len else "")), False
 
         if msg.startswith("[STATUS]"):
-            text = escape(msg[8:].strip())
-            print_formatted_text(HTML(f"<b><ansiwhite>▸ {text}</ansiwhite></b>"))
+            print_formatted_text(HTML(f"<b><ansiwhite>▸ {escape(msg[8:].strip())}</ansiwhite></b>"))
+
         elif msg.startswith("[CYCLE]"):
-            clean_msg = escape(msg.replace('[CYCLE]', '').strip())
-            print_formatted_text(HTML(f"\n<b><ansimagenta>🔄 {clean_msg}</ansimagenta></b>"))
+            print_formatted_text(HTML(f"\n<b><ansimagenta>🔄 {escape(msg[7:].strip())}</ansimagenta></b>"))
+
         elif msg.startswith("[ERROR]"):
-            clean_msg = escape(msg.replace('[ERROR]', '').strip())
-            print_formatted_text(HTML(f"<b><ansired>❌ {clean_msg}</ansired></b>"))
+            print_formatted_text(HTML(f"<b><ansired>✗ {escape(msg[7:].strip())}</ansired></b>"))
+
         elif msg.startswith("[BOROS]"):
-            text = escape(msg[7:].strip())
-            print_formatted_text(HTML(f"<ansicyan>🧠 Boros:</ansicyan> <b><ansiwhite>{text}</ansiwhite></b>"))
+            print_formatted_text(HTML(
+                f"<ansicyan>🧠 Boros:</ansicyan> <b><ansiwhite>{escape(msg[7:].strip())}</ansiwhite></b>"
+            ))
+
         elif msg.startswith("[BOROS EXECUTION]"):
-            text = escape(msg[17:].strip())
-            print_formatted_text(HTML(f"<ansicyan>🚀 Executing:</ansicyan> <b><ansiwhite>{text}</ansiwhite></b>"))
+            print_formatted_text(HTML(
+                f"<ansicyan>🚀 Executing:</ansicyan> <b><ansiwhite>{escape(msg[17:].strip())}</ansiwhite></b>"
+            ))
+
         elif msg.startswith("[TOKENS]"):
-            text = escape(msg[8:].strip())
-            print_formatted_text(HTML(f"<style fg=\"ansiwhite\">📊 {text}</style>"))
+            print_formatted_text(HTML(f"<style fg='ansiwhite'>📊 {escape(msg[8:].strip())}</style>"))
+
         elif msg.startswith("[TOOL] →"):
-            text = escape(msg[8:].strip())
-            print_formatted_text(HTML(f"<ansiyellow>⚡ Calling Tool:</ansiyellow> <style fg=\"#8a8a8a\">{text}</style>"))
+            print_formatted_text(HTML(
+                f"<ansiyellow>⚡ Tool:</ansiyellow> <style fg='#8a8a8a'>{escape(msg[8:].strip())}</style>"
+            ))
+
         elif msg.startswith("[TOOL] ←"):
-            text = msg[8:].strip()
-            preview, is_error = format_result(text)
+            preview, is_error = _fmt_result(msg[8:].strip())
             if is_error:
-                print_formatted_text(HTML(f"<b><ansired>✗ Tool Failed:</ansired></b> <style fg=\"#ff8787\">{preview}</style>"))
+                print_formatted_text(HTML(f"<b><ansired>✗ Tool Failed:</ansired></b> <style fg='#ff8787'>{preview}</style>"))
             else:
-                print_formatted_text(HTML(f"<b><ansigreen>✔ Tool Finished:</ansigreen></b> <style fg=\"#87ff87\">{preview}</style>"))
+                print_formatted_text(HTML(f"<b><ansigreen>✔ Tool:</ansigreen></b> <style fg='#87ff87'>{preview}</style>"))
+
         elif msg.startswith("[EXEC TOOL] →"):
-            text = escape(msg[13:].strip())
-            print_formatted_text(HTML(f"<ansiyellow>⚡ Executing:</ansiyellow> <style fg=\"#8a8a8a\">{text}</style>"))
+            print_formatted_text(HTML(
+                f"<ansiyellow>⚡ Tool:</ansiyellow> <style fg='#8a8a8a'>{escape(msg[13:].strip())}</style>"
+            ))
+
         elif msg.startswith("[EXEC TOOL] ←"):
-            text = msg[13:].strip()
-            preview, is_error = format_result(text)
+            preview, is_error = _fmt_result(msg[13:].strip())
             if is_error:
-                print_formatted_text(HTML(f"<b><ansired>✗ Exec Failed:</ansired></b> <style fg=\"#ff8787\">{preview}</style>"))
+                print_formatted_text(HTML(f"<b><ansired>✗ Tool Failed:</ansired></b> <style fg='#ff8787'>{preview}</style>"))
             else:
-                print_formatted_text(HTML(f"<b><ansigreen>✔ Exec Finished:</ansigreen></b> <style fg=\"#87ff87\">{preview}</style>"))
+                print_formatted_text(HTML(f"<b><ansigreen>✔ Tool:</ansigreen></b> <style fg='#87ff87'>{preview}</style>"))
+
         elif "📝 [PROPOSAL CREATED]" in msg:
             print_formatted_text(HTML("<b><ansicyan> 📝 PROPOSAL CREATED </ansicyan></b>"))
+
         elif "⚙️ [CODE MUTATION]" in msg:
-            print_formatted_text(HTML("<b><ansiyellow> ⚙️ CODE MUTATED </ansiyellow></b>"))
+            print_formatted_text(HTML("<b><ansiyellow> ⚙️  CODE MUTATED </ansiyellow></b>"))
+
         elif msg.startswith("[+]"):
             print_formatted_text(HTML(f"<ansigreen>{escape(msg[:150])}</ansigreen>"))
+
         elif msg.startswith("[-]"):
             print_formatted_text(HTML(f"<ansired>{escape(msg[:150])}</ansired>"))
-        elif msg.startswith("---") or msg.startswith("============="):
-            pass
-        elif msg.startswith("director>"):
-            pass
+
         elif msg.startswith("[RATE_LIMIT]"):
             print_formatted_text(HTML(f"<b><ansiyellow>⏳ {escape(msg)}</ansiyellow></b>"))
+
+        elif msg.startswith("[LOOP]"):
+            print_formatted_text(HTML(f"<style fg='#8a8a8a'>{escape(msg[6:].strip())}</style>"))
+
+        elif msg.startswith("[ADAPT]"):
+            print_formatted_text(HTML(
+                f"<ansicyan>⚙  Adapt:</ansicyan> <style fg='ansiwhite'>{escape(msg[7:].strip())}</style>"
+            ))
+
+        elif msg.startswith("---") or msg.startswith("====="):
+            pass  # decorative separators — suppress
+
         else:
             if "Command failed with return code" in msg:
                 print_formatted_text(HTML(f"<ansired>{escape(msg.strip())}</ansired>"))
@@ -135,249 +160,346 @@ class DirectorInterface:
                 out = msg.strip().replace('\n', ' ')
                 if len(out) > 150:
                     out = out[:147] + "..."
-                print_formatted_text(HTML(f"<style fg=\"#8a8a8a\">{escape(out)}</style>"))
+                print_formatted_text(HTML(f"<style fg='#8a8a8a'>{escape(out)}</style>"))
+
+    # ─────────────────────────────────────────────
+    # Kernel loop (background thread)
+    # ─────────────────────────────────────────────
 
     def run_kernel_loop(self):
-        """Run the actual agentic evolution loop in background."""
-        print_formatted_text(HTML("<b><ansigreen>Starting Boros evolution loop...</ansigreen></b>"))
-
         if self.kernel.evolution_llm is None:
-            print_formatted_text(HTML("<b><ansired>Cannot start loop: No evolution LLM adapter loaded.</ansired></b>"))
-            print_formatted_text(HTML("<ansiyellow>Set ANTHROPIC_API_KEY in environment or boros/.env, then restart.</ansiyellow>"))
+            print_formatted_text(HTML(
+                "<b><ansired>Cannot start — no LLM loaded. Check API key and restart.</ansired></b>"
+            ))
             return
 
         from boros.agent_loop import AgentLoop
         loop = AgentLoop(self.kernel, log_callback=self.log_to_console)
-
         try:
             loop.run_continuous(
                 should_pause=lambda: self.pause_requested,
                 on_cycle_complete=lambda num, tc: print_formatted_text(HTML(
-                    f"<ansigreen>✔ Cycle {num} complete ({tc} tool calls)</ansigreen>"
+                    f"<ansigreen>✔ Cycle {num} done  ({tc} tool calls)</ansigreen>"
                 ))
             )
         except Exception as e:
-            print_formatted_text(HTML(f"<b><ansired>Loop crashed: {escape(str(e))}</ansired></b>"))
             import traceback
+            print_formatted_text(HTML(f"<b><ansired>Loop crashed: {escape(str(e))}</ansired></b>"))
             traceback.print_exc()
 
-    def tail_logs(self):
-        try:
-            with open(self.cycles_log, "r") as f:
-                f.seek(0, 2)
-                while not self.pause_requested:
-                    line = f.readline()
-                    if line:
-                        print_formatted_text(HTML(f"<style fg=\"#8a8a8a\">[LOG] {escape(line.strip())}</style>"))
-                    else:
-                        time.sleep(0.5)
-        except Exception:
-            pass
+    # ─────────────────────────────────────────────
+    # Main entry point
+    # ─────────────────────────────────────────────
 
     def run(self):
-        # 1. Print the Cool ASCII Banner using Rich (since it's before patch_stdout)
-        console = Console()
-        logo = '''
-██████╗  ██████╗ ██████╗  ██████╗ ███████╗
-██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝
-██████╔╝██║   ██║██████╔╝██║   ██║███████╗
-██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║
-██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║
-╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
-        '''
-        text = Text(logo.strip("\n"), style="bold cyan")
-        text.append("\n\nSelf-Evolving Agent", style="italic bright_black")
-        panel = Panel(Align.center(text), border_style="cyan", padding=(1, 2))
-        console.print(panel)
-        console.print("")
-
-        # 2. Boot health checks
-        print_formatted_text(HTML("<b><ansigreen>Running Kernel Boot Sequence...</ansigreen></b>"))
-        for skill in self.kernel.manifest.get("boot_sequence", []):
-            print_formatted_text(HTML(f"<ansigreen>✔ {escape(skill)}</ansigreen>"))
-            time.sleep(0.02)
-
-        print_formatted_text(HTML(f"<ansigreen>✔ {len(self.kernel.registry)} functions loaded into registry</ansigreen>"))
-
-        if self.kernel.evolution_llm:
-            print_formatted_text(HTML(f"<ansigreen>✔ Evolution LLM: {self.kernel.config['providers']['evolution_api']['provider']}</ansigreen>"))
-            try:
-                print_formatted_text(HTML("<style fg=\"#8a8a8a\">  Testing Evolution LLM reachability...</style>"))
-                self.kernel.evolution_llm.complete([{"role": "user", "content": "ping"}], system="Reply 'pong'")
-                print_formatted_text(HTML("<ansigreen>  ✔ Evolution LLM is reachable</ansigreen>"))
-            except Exception as e:
-                print_formatted_text(HTML(f"<b><ansired>  ✗ Evolution LLM Unreachable: {escape(str(e))}</ansired></b>"))
-        else:
-            print_formatted_text(HTML("<ansiyellow>⚠ Evolution LLM not loaded (API key missing)</ansiyellow>"))
-
-        if self.kernel.meta_eval_llm:
-            print_formatted_text(HTML(f"<ansigreen>✔ Meta-Eval LLM: {self.kernel.config['providers']['meta_eval_api']['provider']}</ansigreen>"))
-            try:
-                print_formatted_text(HTML("<style fg=\"#8a8a8a\">  Testing Meta-Eval LLM reachability...</style>"))
-                self.kernel.meta_eval_llm.complete([{"role": "user", "content": "ping"}], system="Reply 'pong'")
-                print_formatted_text(HTML("<ansigreen>  ✔ Meta-Eval LLM is reachable</ansigreen>"))
-            except Exception as e:
-                print_formatted_text(HTML(f"<b><ansired>  ✗ Meta-Eval LLM Unreachable: {escape(str(e))}</ansired></b>"))
-        else:
-            print_formatted_text(HTML("<ansiyellow>⚠ Meta-Eval LLM not loaded (API key missing)</ansiyellow>"))
-
-        # Director CLI
-        session = PromptSession()
-
-        # Boot mode selection
-        print_formatted_text(HTML("\n<b><ansiblue>Select Boot Mode:</ansiblue></b>"))
-        print_formatted_text(HTML(" 1. <ansimagenta>Evolution Mode</ansimagenta> (Autonomous self-improvement)"))
-        print_formatted_text(HTML(" 2. <ansicyan>Digital Employee Mode</ansicyan> (Execution on demand)"))
-
-        selected_mode = "evolution"
-        _in_fork_state = False
-        _boot_state_file = self.boros_root / "session" / "loop_state.json"
-        if _boot_state_file.exists():
-            try:
-                _boot_state = json.loads(_boot_state_file.read_text())
-                if _boot_state.get("agent_state") == "boros-fork":
-                    _in_fork_state = True
-                    selected_mode = "employee"
-                    _gen = _boot_state.get("generation", 0)
-                    _cycle = _boot_state.get("forked_at_cycle", "?")
-                    print_formatted_text(HTML(
-                        f"<b><ansimagenta>🔱 Resuming Boros-Fork  "
-                        f"(Gen {_gen} — forked at cycle {_cycle})</ansimagenta></b>"
-                    ))
-                    print_formatted_text(HTML("<ansicyan>Deployment mode active — awaiting tasks.</ansicyan>\n"))
-            except Exception:
-                pass
-
-        if not _in_fork_state:
-            while True:
-                try:
-                    choice = session.prompt("Select [1/2]: ").strip()
-                    if choice == "1":
-                        selected_mode = "evolution"
-                        print_formatted_text(HTML("<b><ansimagenta>Starting in Evolution Mode...</ansimagenta></b>\n"))
-                        break
-                    elif choice == "2":
-                        selected_mode = "employee"
-                        print_formatted_text(HTML("<b><ansicyan>Starting in Digital Employee Mode...</ansicyan></b>\n"))
-                        break
-                    else:
-                        print_formatted_text(HTML("<ansiyellow>Invalid choice. Please enter 1 or 2.</ansiyellow>"))
-                except (KeyboardInterrupt, EOFError):
-                    return
-
+        session    = PromptSession()
         state_file = self.boros_root / "session" / "loop_state.json"
+
+        selected_mode  = "evolution"
+        _in_fork_state = False
+
+        # Read persisted state
+        state = {}
         if state_file.exists():
             try:
                 state = json.loads(state_file.read_text())
+            except Exception:
+                pass
+
+        total_cycles = state.get("total_cycles_completed", 0)
+        current_cycle = state.get("cycle", 0)
+        is_first_boot = (total_cycles == 0 and current_cycle == 0)
+
+        if is_first_boot:
+            # Only time mode selection prompt appears
+            print_formatted_text(HTML("\n<b>Select a mode to start:</b>"))
+            print_formatted_text(HTML("  <b>1</b>  <ansimagenta>evolve</ansimagenta>  — autonomous self-improvement"))
+            print_formatted_text(HTML("  <b>2</b>  <ansicyan>work</ansicyan>    — on-demand task execution\n"))
+            while True:
+                try:
+                    choice = session.prompt("  → ").strip()
+                    if choice == "1":
+                        selected_mode = "evolution"
+                        break
+                    elif choice == "2":
+                        selected_mode = "employee"
+                        break
+                    else:
+                        print_formatted_text(HTML("<ansiyellow>Enter 1 or 2.</ansiyellow>"))
+                except (KeyboardInterrupt, EOFError):
+                    sys.exit(0)
+        else:
+            agent_state   = state.get("agent_state", "")
+            selected_mode = state.get("mode", "evolution")
+
+            if agent_state == "boros-fork":
+                _in_fork_state = True
+                selected_mode  = "employee"
+                gen   = state.get("generation", 0)
+                cycle = state.get("forked_at_cycle", "?")
+                print_formatted_text(HTML(
+                    f"<b><ansimagenta>🔱 Boros-Fork  Gen {gen}  ·  forked at cycle {cycle}</ansimagenta></b>"
+                ))
+            elif selected_mode == "evolution":
+                print_formatted_text(HTML(
+                    f"<ansimagenta>Resuming Evolution  ·  Cycle {current_cycle}</ansimagenta>"
+                ))
+            else:
+                print_formatted_text(HTML("<ansicyan>Resuming Work Mode</ansicyan>"))
+
+        # Persist selected mode
+        if state_file.exists():
+            try:
                 state["mode"] = selected_mode
                 state_file.write_text(json.dumps(state, indent=2))
-            except Exception: pass
+            except Exception:
+                pass
 
-        # Start adapt scheduler if resuming fork state
         if _in_fork_state:
             self._start_adapt_scheduler()
 
-        # Start agent loop in background
-        kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
-        kernel_thread.start()
+        threading.Thread(target=self.run_kernel_loop, daemon=True).start()
+        print_formatted_text(HTML(""))
 
-        print_formatted_text(HTML("<b><ansiblue>Boros Director Interface</ansiblue></b>"))
-        print_formatted_text(HTML(
-            "Commands: <b>boros status</b> | <b>boros pause</b> | <b>boros resume</b> | "
-            "<b>boros evolution</b> | <b>boros employee</b> | "
-            "<b>boros fork</b> | <b>boros re-evolve</b> | "
-            "<b>boros adapt</b> | <b>boros adapt-config &lt;interval&gt;</b> (e.g. 2d, 1w, 12h, off) "
-            "| Ctrl+C to stop."
-        ))
-
+        # ── Command loop ──────────────────────────────
         while True:
             try:
                 with patch_stdout():
-                    text = session.prompt("director> ")
-                self.handle_command(text)
+                    text = session.prompt("boros> ").strip()
+                if text:
+                    self.handle_command(text)
             except KeyboardInterrupt:
-                print_formatted_text(HTML("<ansiyellow>Shutting down...</ansiyellow>"))
-                self.pause_requested = True
-                break
+                self._do_quit()
             except EOFError:
-                self.pause_requested = True
-                break
+                self._do_quit()
 
-    def handle_command(self, text):
-        text = text.strip()
-        if not text:
-            return
-        if not text.startswith("boros "):
-            print_formatted_text(HTML("<b><ansired>Commands must start with 'boros '</ansired></b>"))
-            return
+    # ─────────────────────────────────────────────
+    # Command dispatch
+    # ─────────────────────────────────────────────
 
-        cmd = text[6:].strip()
+    def handle_command(self, raw):
+        parts = raw.strip().split()
+        if not parts:
+            return
+        cmd = parts[0].lower()
+
         if cmd == "status":
-            state_file = self.boros_root / "session" / "loop_state.json"
-            if state_file.exists():
-                state = json.loads(state_file.read_text())
-                print_formatted_text(HTML(f"<b><ansigreen>Loop State:</ansigreen></b> {escape(json.dumps(state, indent=2))}"))
-            else:
-                print_formatted_text(HTML("<ansiyellow>No active loop state.</ansiyellow>"))
-            print_formatted_text(HTML(f"<b>Paused:</b> {self.pause_requested}"))
-            print_formatted_text(HTML(f"<b>Registry:</b> {len(self.kernel.registry)} functions"))
+            self._cmd_status()
         elif cmd == "pause":
-            self.pause_requested = True
-            print_formatted_text(HTML("<ansiyellow>Pause requested. Will stop at next cycle boundary.</ansiyellow>"))
+            self._cmd_pause()
         elif cmd == "resume":
-            if self.pause_requested:
-                self.pause_requested = False
-                kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
-                kernel_thread.start()
-                print_formatted_text(HTML("<ansigreen>Resumed evolution loop.</ansigreen>"))
-        elif cmd == "evolution" or cmd == "employee":
-            state_file = self.boros_root / "session" / "loop_state.json"
-            if state_file.exists():
-                state = json.loads(state_file.read_text())
-                state["mode"] = cmd
-                state_file.write_text(json.dumps(state, indent=2))
-                if cmd == "evolution":
-                    print_formatted_text(HTML("<b><ansimagenta>🔄 Switching to Evolution Mode</ansimagenta></b>"))
-                else:
-                    print_formatted_text(HTML("<b><ansicyan>🧑‍💻 Switching to Digital Employee Mode</ansicyan></b>"))
-            else:
-                print_formatted_text(HTML("<ansiyellow>Loop state file missing; cannot change mode yet.</ansiyellow>"))
+            self._cmd_resume()
+        elif cmd == "stop":
+            self._cmd_stop()
+        elif cmd in ("evolve", "evolution"):
+            self._cmd_set_mode("evolution")
+        elif cmd in ("work", "employee"):
+            self._cmd_set_mode("employee")
         elif cmd == "fork":
             self._handle_fork()
         elif cmd == "re-evolve":
             self._handle_re_evolve()
         elif cmd == "adapt":
-            self._handle_adapt_now()
-        elif cmd.startswith("adapt-config "):
-            self._handle_adapt_config(cmd[len("adapt-config "):].strip())
+            # "adapt" or "adapt config 2d"
+            if len(parts) >= 2 and parts[1] == "config":
+                self._handle_adapt_config(parts[2] if len(parts) >= 3 else "")
+            else:
+                self._handle_adapt_now()
+        elif cmd == "adapt-config":
+            self._handle_adapt_config(parts[1] if len(parts) >= 2 else "")
+        elif cmd == "verbose":
+            self.verbose = True
+            print_formatted_text(HTML("<ansigreen>Verbose on — full tool trace visible.</ansigreen>"))
+        elif cmd == "quiet":
+            self.verbose = False
+            print_formatted_text(HTML("<ansigreen>Quiet mode — summary output only.</ansigreen>"))
+        elif cmd == "logs":
+            n = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 20
+            self._cmd_logs(n)
+        elif cmd in ("help", "?"):
+            self._cmd_help()
+        elif cmd in ("quit", "exit"):
+            self._do_quit()
         else:
-            with open(self.pending_file, "r") as f:
-                data = json.load(f)
-            data["pending"].append(cmd)
-            with open(self.pending_file, "w") as f:
-                json.dump(data, f, indent=2)
-            print_formatted_text(HTML(f"<ansiblue>Queued:</ansiblue> {escape(cmd)}"))
+            print_formatted_text(HTML(
+                f"<ansiyellow>Unknown command: <b>{escape(raw)}</b>  —  "
+                f"type <b>help</b> to see available commands.</ansiyellow>"
+            ))
 
     # ─────────────────────────────────────────────
-    # Fork / Re-Evolve / Adapt handlers
+    # Command implementations
+    # ─────────────────────────────────────────────
+
+    def _cmd_status(self):
+        state_file   = self.boros_root / "session" / "loop_state.json"
+        hw_file      = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
+        lineage_file = self.boros_root / "lineage.json"
+
+        state       = {}
+        high_water  = {}
+
+        if state_file.exists():
+            try:
+                state = json.loads(state_file.read_text())
+            except Exception:
+                pass
+        if hw_file.exists():
+            try:
+                high_water = json.loads(hw_file.read_text())
+            except Exception:
+                pass
+
+        mode       = state.get("agent_state", state.get("mode", "evolution"))
+        cycle      = state.get("cycle", 0)
+        stage      = state.get("stage") or "—"
+        generation = state.get("generation", 0)
+        paused     = "yes" if self.pause_requested else "no"
+
+        snapshots  = 0
+        snap_dir   = self.boros_root / "snapshots"
+        if snap_dir.exists():
+            snapshots = len(list(snap_dir.glob("snap-*")))
+
+        skill_count    = len(self.kernel.manifest.get("skills", {}))
+        registry_count = len(self.kernel.registry)
+
+        table = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+        table.add_column(style="dim", no_wrap=True)
+        table.add_column()
+
+        mode_style = "magenta" if "evol" in mode else "cyan"
+        table.add_row("Mode",   f"[{mode_style}]{mode}[/{mode_style}]  ·  paused: {paused}")
+        table.add_row("Cycle",  f"{cycle}  ·  {stage}")
+        table.add_row("Gen",    f"{generation}  ·  snapshots: {snapshots}")
+
+        if high_water:
+            table.add_row("", "")
+            for cat, score in high_water.items():
+                if isinstance(score, (int, float)):
+                    filled = int(score * 10)
+                    bar    = "█" * filled + "░" * (10 - filled)
+                    pct    = int(score * 100)
+                    best   = "  [green]best[/green]" if score > 0 else ""
+                    table.add_row(cat, f"{score:.3f}  [green]{bar}[/green]  {pct}%{best}")
+
+        table.add_row("", "")
+        table.add_row("Skills", f"{skill_count} loaded  ·  {registry_count} functions")
+
+        self._console.print()
+        self._console.print(Panel(table, title="[bold]Boros[/bold]", border_style="cyan", padding=(0, 1)))
+        self._console.print()
+
+    def _cmd_pause(self):
+        self.pause_requested = True
+        print_formatted_text(HTML("<ansiyellow>Pausing — will stop at end of current cycle.</ansiyellow>"))
+
+    def _cmd_resume(self):
+        if not self.pause_requested:
+            print_formatted_text(HTML("<ansiyellow>Not paused.</ansiyellow>"))
+            return
+        self.pause_requested = False
+        threading.Thread(target=self.run_kernel_loop, daemon=True).start()
+        print_formatted_text(HTML("<ansigreen>Resumed.</ansigreen>"))
+
+    def _cmd_stop(self):
+        self.pause_requested = True
+        print_formatted_text(HTML("<ansiyellow>Stopping.</ansiyellow>"))
+        sys.exit(0)
+
+    def _cmd_set_mode(self, mode):
+        state_file = self.boros_root / "session" / "loop_state.json"
+        if not state_file.exists():
+            print_formatted_text(HTML("<ansiyellow>No active session.</ansiyellow>"))
+            return
+        try:
+            state = json.loads(state_file.read_text())
+            state["mode"] = mode
+            # Clear fork lock when explicitly switching modes
+            if state.get("agent_state") == "boros-fork" and mode in ("evolution", "employee"):
+                state["agent_state"] = mode
+            state_file.write_text(json.dumps(state, indent=2))
+            if mode == "evolution":
+                print_formatted_text(HTML("<b><ansimagenta>Switched to Evolution Mode.</ansimagenta></b>"))
+            else:
+                print_formatted_text(HTML("<b><ansicyan>Switched to Work Mode.</ansicyan></b>"))
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>Failed: {escape(str(e))}</ansired>"))
+
+    def _cmd_logs(self, n):
+        candidates = [
+            self.boros_root / "logs" / "cycles.log",
+            self.boros_root / "logs" / "execution_cycles.log",
+        ]
+        existing = [f for f in candidates if f.exists() and f.stat().st_size > 0]
+        if not existing:
+            print_formatted_text(HTML("<ansiyellow>No logs yet.</ansiyellow>"))
+            return
+        log_file = max(existing, key=lambda f: f.stat().st_mtime)
+        try:
+            lines  = log_file.read_text(encoding="utf-8", errors="replace").strip().split("\n")
+            recent = [l for l in lines if l.strip()][-n:]
+            print_formatted_text(HTML(
+                f"<style fg='#8a8a8a'>── {log_file.name}  (last {len(recent)} lines) ──</style>"
+            ))
+            for line in recent:
+                print_formatted_text(HTML(f"<style fg='#8a8a8a'>{escape(line)}</style>"))
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>Could not read logs: {escape(str(e))}</ansired>"))
+
+    def _cmd_help(self):
+        table = Table(show_header=False, box=None, padding=(0, 3, 0, 0))
+        table.add_column(style="bold cyan", no_wrap=True, min_width=24)
+        table.add_column(style="dim")
+
+        rows = [
+            ("status",             "Show current state and scores"),
+            ("pause",              "Pause after current cycle completes"),
+            ("resume",             "Resume from pause"),
+            ("stop",               "Stop immediately"),
+            ("",                   ""),
+            ("evolve",             "Switch to evolution mode"),
+            ("work",               "Switch to work mode  (accepts queued tasks)"),
+            ("fork",               "Freeze evolved state as a deployment agent"),
+            ("re-evolve",          "Start next-generation evolution from fork"),
+            ("adapt",              "Run an adaptation cycle now"),
+            ("adapt-config <t>",   "Set adaptation schedule  (2d, 1w, 12h, 30m, off)"),
+            ("",                   ""),
+            ("verbose",            "Show full tool trace output"),
+            ("quiet",              "Show summary output only  (default)"),
+            ("logs [n]",           "Show last n log lines  (default 20)"),
+            ("",                   ""),
+            ("help",               "Show this help"),
+            ("quit  /  exit",      "Exit Boros"),
+        ]
+        for cmd, desc in rows:
+            table.add_row(cmd, desc)
+
+        self._console.print()
+        self._console.print(table)
+        self._console.print()
+
+    def _do_quit(self):
+        self.pause_requested = True
+        sys.exit(0)
+
+    # ─────────────────────────────────────────────
+    # Fork / Re-Evolve / Adapt
     # ─────────────────────────────────────────────
 
     def _handle_fork(self):
         state_file = self.boros_root / "session" / "loop_state.json"
         if not state_file.exists():
-            print_formatted_text(HTML("<ansiyellow>No loop state found. Start a session first.</ansiyellow>"))
+            print_formatted_text(HTML("<ansiyellow>No active session.</ansiyellow>"))
             return
 
         state = json.loads(state_file.read_text())
         if state.get("agent_state") == "boros-fork":
             print_formatted_text(HTML(
-                "<ansiyellow>Already in boros-fork state. "
-                "Use 'boros re-evolve' to start next generation evolution.</ansiyellow>"
+                "<ansiyellow>Already forked. Use <b>re-evolve</b> to start next generation.</ansiyellow>"
             ))
             return
 
-        # High-water marks become the fork's capability snapshot
-        hw_file = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
+        hw_file    = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
         high_water = {}
         if hw_file.exists():
             try:
@@ -385,9 +507,8 @@ class DirectorInterface:
             except Exception:
                 pass
 
-        # Load or create lineage.json
         lineage_file = self.boros_root / "lineage.json"
-        lineage = {"entries": []}
+        lineage      = {"entries": []}
         if lineage_file.exists():
             try:
                 lineage = json.loads(lineage_file.read_text())
@@ -395,51 +516,46 @@ class DirectorInterface:
                 pass
 
         generation = sum(1 for e in lineage.get("entries", []) if e.get("event") == "fork")
+        config     = json.loads((self.boros_root / "config.json").read_text())
+        interval   = config.get("fork", {}).get("adaptation_interval", "2d")
 
-        config = json.loads((self.boros_root / "config.json").read_text())
-        adaptation_interval = config.get("fork", {}).get("adaptation_interval", "2d")
-
-        # Append fork node to lineage
         lineage["entries"].append({
-            "event": "fork",
-            "generation": generation,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-            "cycle_at_fork": state.get("cycle", 0),
-            "total_cycles_completed": state.get("total_cycles_completed", 0),
-            "agent_state": "boros-fork",
-            "high_water_marks": high_water,
-            "adaptation_interval": adaptation_interval
+            "event":                 "fork",
+            "generation":            generation,
+            "timestamp":             datetime.datetime.utcnow().isoformat() + "Z",
+            "cycle_at_fork":         state.get("cycle", 0),
+            "total_cycles_completed":state.get("total_cycles_completed", 0),
+            "agent_state":           "boros-fork",
+            "high_water_marks":      high_water,
+            "adaptation_interval":   interval,
         })
         lineage_file.write_text(json.dumps(lineage, indent=2))
 
-        # Lock the mode
-        state["mode"] = "employee"
-        state["agent_state"] = "boros-fork"
-        state["forked_at_cycle"] = state.get("cycle", 0)
-        state["generation"] = generation
+        state["mode"]           = "employee"
+        state["agent_state"]    = "boros-fork"
+        state["forked_at_cycle"]= state.get("cycle", 0)
+        state["generation"]     = generation
         state_file.write_text(json.dumps(state, indent=2))
 
         self._start_adapt_scheduler()
 
-        print_formatted_text(HTML(f"<b><ansimagenta>🔱 BOROS FORKED — Generation {generation}</ansimagenta></b>"))
-        print_formatted_text(HTML(f"<ansigreen>Forked at cycle {state['forked_at_cycle']}</ansigreen>"))
-        print_formatted_text(HTML(f"<ansicyan>Capability snapshot: {escape(json.dumps(high_water))}</ansicyan>"))
-        print_formatted_text(HTML(f"<ansiyellow>Adaptation scheduled every: {adaptation_interval}</ansiyellow>"))
+        print_formatted_text(HTML(f"<b><ansimagenta>🔱 Forked — Generation {generation}</ansimagenta></b>"))
+        print_formatted_text(HTML(f"<ansigreen>Scores at fork: {escape(json.dumps(high_water))}</ansigreen>"))
+        print_formatted_text(HTML(f"<ansiyellow>Adaptation every {interval}  ·  use <b>adapt-config</b> to change</ansiyellow>"))
         print_formatted_text(HTML(
-            "<style fg='#8a8a8a'>Running as a pure work agent. "
-            "Use 'boros re-evolve' to begin next generation.</style>"
+            "<style fg='#8a8a8a'>Now a deployment agent. Type <b>re-evolve</b> to begin next generation.</style>"
         ))
 
     def _handle_re_evolve(self):
         state_file = self.boros_root / "session" / "loop_state.json"
         if not state_file.exists():
-            print_formatted_text(HTML("<ansiyellow>No loop state found.</ansiyellow>"))
+            print_formatted_text(HTML("<ansiyellow>No active session.</ansiyellow>"))
             return
 
         state = json.loads(state_file.read_text())
 
         lineage_file = self.boros_root / "lineage.json"
-        lineage = {"entries": []}
+        lineage      = {"entries": []}
         if lineage_file.exists():
             try:
                 lineage = json.loads(lineage_file.read_text())
@@ -448,110 +564,102 @@ class DirectorInterface:
 
         generation = sum(1 for e in lineage.get("entries", []) if e.get("event") == "fork")
 
-        # Read task log to seed the first REFLECT cycle
+        # Seed first REFLECT with real deployment task history
         task_log_file = self.boros_root / "logs" / "task_log.jsonl"
-        recent_tasks = []
+        recent_tasks  = []
         if task_log_file.exists():
             try:
-                lines = [l for l in task_log_file.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+                lines        = [l for l in task_log_file.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
                 recent_tasks = [json.loads(l) for l in lines[-50:]]
             except Exception:
                 pass
 
-        adapt_seed = {
-            "source": "boros-fork field deployment data",
-            "generation": generation,
-            "task_count": len(recent_tasks),
+        (self.boros_root / "session" / "adapt_seed.json").write_text(json.dumps({
+            "source":       "boros-fork field deployment data",
+            "generation":   generation,
+            "task_count":   len(recent_tasks),
             "recent_tasks": recent_tasks[-10:],
-            "instruction": (
+            "instruction":  (
                 f"You are beginning evolution generation {generation}. "
-                "The tasks above are real requests users gave you during deployment. "
-                "Identify capability gaps — tasks that failed, had high retries, or had no skill to handle them. "
-                "Your first evolution targets should address these real-world gaps."
-            )
-        }
-        (self.boros_root / "session" / "adapt_seed.json").write_text(
-            json.dumps(adapt_seed, indent=2)
-        )
+                "Study the task history above — these are real requests from deployment. "
+                "Identify capability gaps and target them in your first evolution cycles."
+            ),
+        }, indent=2))
 
         lineage["entries"].append({
-            "event": "re-evolve",
-            "generation": generation,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
-            "tasks_since_fork": len(recent_tasks),
-            "world_model": "world_model.json"
+            "event":           "re-evolve",
+            "generation":      generation,
+            "timestamp":       datetime.datetime.utcnow().isoformat() + "Z",
+            "tasks_since_fork":len(recent_tasks),
+            "world_model":     "world_model.json",
         })
         lineage_file.write_text(json.dumps(lineage, indent=2))
 
-        state["mode"] = "evolution"
-        state["agent_state"] = "evolution"
+        state["mode"]       = "evolution"
+        state["agent_state"]= "evolution"
         state["generation"] = generation
         state.pop("forked_at_cycle", None)
         state_file.write_text(json.dumps(state, indent=2))
 
         self.pause_requested = False
-        kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
-        kernel_thread.start()
+        threading.Thread(target=self.run_kernel_loop, daemon=True).start()
 
-        print_formatted_text(HTML(f"<b><ansimagenta>🔄 Re-Evolution Started — Generation {generation}</ansimagenta></b>"))
-        print_formatted_text(HTML(f"<ansicyan>Seeded with {len(recent_tasks)} tasks from field deployment.</ansicyan>"))
+        print_formatted_text(HTML(f"<b><ansimagenta>🔄 Re-Evolution started — Generation {generation}</ansimagenta></b>"))
+        print_formatted_text(HTML(f"<ansicyan>Seeded with {len(recent_tasks)} real deployment tasks.</ansicyan>"))
         print_formatted_text(HTML(
-            "<ansigreen>Evolution loop restarted. "
-            "Edit world_model.json before running to target new capabilities.</ansigreen>"
+            "<ansigreen>Edit world_model.json to add new capability targets, then watch it evolve.</ansigreen>"
         ))
 
     def _handle_adapt_now(self):
         state_file = self.boros_root / "session" / "loop_state.json"
         if state_file.exists():
             try:
-                state = json.loads(state_file.read_text())
-                if state.get("agent_state") != "boros-fork":
+                if json.loads(state_file.read_text()).get("agent_state") != "boros-fork":
                     print_formatted_text(HTML(
-                        "<ansiyellow>Adapt is only available in boros-fork state. "
-                        "Run 'boros fork' first.</ansiyellow>"
+                        "<ansiyellow>Adapt is only available after <b>fork</b>.</ansiyellow>"
                     ))
                     return
             except Exception:
                 pass
-
         print_formatted_text(HTML("<ansicyan>Running adaptation cycle...</ansicyan>"))
         threading.Thread(target=self._run_adapt_engine, daemon=True).start()
 
     def _handle_adapt_config(self, interval):
-        valid_units = ("h", "d", "w", "m")
-        if interval != "off" and not (len(interval) >= 2 and interval[-1] in valid_units and interval[:-1].isdigit()):
+        if not interval:
             print_formatted_text(HTML(
-                f"<ansired>Invalid interval '{escape(interval)}'. "
-                "Use format: 2d, 1w, 12h, 30m, or 'off'</ansired>"
+                "<ansiyellow>Usage: adapt-config &lt;interval&gt;  (2d, 1w, 12h, 30m, off)</ansiyellow>"
             ))
             return
-
-        config_path = self.boros_root / "config.json"
+        valid_units = ("h", "d", "w", "m")
+        if interval != "off" and not (
+            len(interval) >= 2 and interval[-1] in valid_units and interval[:-1].isdigit()
+        ):
+            print_formatted_text(HTML(
+                f"<ansired>Invalid: '{escape(interval)}'. Use 2d, 1w, 12h, 30m, or off</ansired>"
+            ))
+            return
         try:
+            config_path = self.boros_root / "config.json"
             config = json.loads(config_path.read_text())
-            if "fork" not in config:
-                config["fork"] = {}
-            config["fork"]["adaptation_interval"] = interval
+            config.setdefault("fork", {})["adaptation_interval"] = interval
             config_path.write_text(json.dumps(config, indent=2))
-            print_formatted_text(HTML(f"<ansigreen>Adaptation interval set to: {escape(interval)}</ansigreen>"))
+            print_formatted_text(HTML(f"<ansigreen>Adaptation interval set to {escape(interval)}.</ansigreen>"))
             if interval != "off":
                 self._start_adapt_scheduler()
         except Exception as e:
-            print_formatted_text(HTML(f"<ansired>Failed to update config: {escape(str(e))}</ansired>"))
+            print_formatted_text(HTML(f"<ansired>Failed: {escape(str(e))}</ansired>"))
 
     def _run_adapt_engine(self):
         try:
-            import sys
             sys.path.insert(0, str(self.boros_root.parent))
             from boros.adapt_engine import AdaptEngine
-            engine = AdaptEngine(self.kernel, log_callback=self.log_to_console)
-            result = engine.run()
+            result = AdaptEngine(self.kernel, log_callback=self.log_to_console).run()
             if result:
                 print_formatted_text(HTML("<ansigreen>✔ Adaptation complete — changes applied.</ansigreen>"))
             else:
-                print_formatted_text(HTML("<ansiyellow>Adaptation cycle complete — no changes applied.</ansiyellow>"))
+                print_formatted_text(HTML("<ansiyellow>Adaptation complete — no changes applied.</ansiyellow>"))
         except Exception as e:
-            print_formatted_text(HTML(f"<ansired>Adaptation engine error: {escape(str(e))}</ansired>"))
+            print_formatted_text(HTML(f"<ansired>Adaptation error: {escape(str(e))}</ansired>"))
 
     def _start_adapt_scheduler(self):
         if self._adapt_thread and self._adapt_thread.is_alive():
@@ -560,11 +668,9 @@ class DirectorInterface:
         self._adapt_thread.start()
 
     def _adapt_scheduler_loop(self):
-        """Background thread: fires adapt engine when the configured interval has elapsed."""
         while not self.pause_requested:
             try:
-                config_path = self.boros_root / "config.json"
-                config = json.loads(config_path.read_text())
+                config   = json.loads((self.boros_root / "config.json").read_text())
                 fork_cfg = config.get("fork", {})
                 interval_str = fork_cfg.get("adaptation_interval", "off")
 
@@ -572,24 +678,26 @@ class DirectorInterface:
                     time.sleep(60)
                     continue
 
-                interval_seconds = self._parse_interval_seconds(interval_str)
-                if interval_seconds is None:
+                interval_sec = self._parse_interval_seconds(interval_str)
+                if interval_sec is None:
                     time.sleep(60)
                     continue
 
                 last_ts = fork_cfg.get("last_adapt_timestamp")
-                if last_ts:
-                    last_dt = datetime.datetime.fromisoformat(last_ts.rstrip("Z"))
-                    elapsed = (datetime.datetime.utcnow() - last_dt).total_seconds()
-                    if elapsed < interval_seconds:
-                        time.sleep(60)
-                        continue
+                if not last_ts:
+                    # No prior adapt — initialize timestamp so interval starts from now
+                    config["fork"]["last_adapt_timestamp"] = datetime.datetime.utcnow().isoformat() + "Z"
+                    (self.boros_root / "config.json").write_text(json.dumps(config, indent=2))
+                    time.sleep(60)
+                    continue
+                last_dt = datetime.datetime.fromisoformat(last_ts.rstrip("Z"))
+                if (datetime.datetime.utcnow() - last_dt).total_seconds() < interval_sec:
+                    time.sleep(60)
+                    continue
 
-                # Only fire when still in fork state
                 state_file = self.boros_root / "session" / "loop_state.json"
                 if state_file.exists():
-                    state = json.loads(state_file.read_text())
-                    if state.get("agent_state") != "boros-fork":
+                    if json.loads(state_file.read_text()).get("agent_state") != "boros-fork":
                         time.sleep(60)
                         continue
 
@@ -601,12 +709,12 @@ class DirectorInterface:
 
             time.sleep(60)
 
-    def _parse_interval_seconds(self, interval_str):
-        if not interval_str or interval_str == "off":
+    def _parse_interval_seconds(self, s):
+        if not s or s == "off":
             return None
         try:
-            unit = interval_str[-1]
-            value = int(interval_str[:-1])
-            return value * {"m": 60, "h": 3600, "d": 86400, "w": 604800}.get(unit, 0) or None
+            v = int(s[:-1])
+            u = s[-1]
+            return v * {"m": 60, "h": 3600, "d": 86400, "w": 604800}.get(u, 0) or None
         except Exception:
             return None
