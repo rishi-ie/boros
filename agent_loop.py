@@ -186,7 +186,18 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 8. High-water marks
+        # 8. Field deployment seed — injected by boros re-evolve to inform first REFLECT
+        adapt_seed_file = self.boros_root / "session" / "adapt_seed.json"
+        if adapt_seed_file.exists():
+            try:
+                parts.append(
+                    f"## Field Deployment History (Your Starting Context)\n"
+                    f"```json\n{adapt_seed_file.read_text(encoding='utf-8')}\n```"
+                )
+            except Exception:
+                pass
+
+        # 9. High-water marks
         hw_file = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
         if hw_file.exists():
             try:
@@ -194,7 +205,7 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 9. Bootstrap mode — if no scores exist, force immediate eval
+        # 10. Bootstrap mode — if no scores exist, force immediate eval
         if not has_scores:
             parts.append(
                 "## ⚡ BOOTSTRAP MODE — CRITICAL INSTRUCTION\n"
@@ -208,7 +219,7 @@ class AgentLoop:
                 "**DO NOT target eval-bridge. DO NOT write hypotheses. Just get scores first.**"
             )
 
-        # 10. Environment reminder
+        # 11. Environment reminder
         os_name = platform.system()
         if os_name == "Windows":
             env_note = (
@@ -609,6 +620,22 @@ class AgentLoop:
             log_file.parent.mkdir(parents=True, exist_ok=True)
             with open(log_file, "a") as f:
                 f.write(f"Execution cycle ended. status={status} tool_calls={tool_call_count}\n")
+            # Structured task log for adaptation engine
+            try:
+                import datetime as _dt
+                task_entry = {
+                    "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
+                    "task": (active_task or "")[:200],
+                    "status": status,
+                    "tool_calls": tool_call_count,
+                    "duration_seconds": round(time.time() - cycle_start, 1),
+                    "empty_turns": empty_turns
+                }
+                task_log = self.boros_root / "logs" / "task_log.jsonl"
+                with open(task_log, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(task_entry) + "\n")
+            except Exception:
+                pass
 
         self.log(f"[CYCLE] Execution Finished. {tool_call_count} tool calls.")
         return tool_call_count

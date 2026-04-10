@@ -3,6 +3,7 @@ import time
 import json
 import os
 import re
+import datetime
 from pathlib import Path
 from prompt_toolkit import PromptSession, print_formatted_text, HTML
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -34,6 +35,8 @@ class DirectorInterface:
         self.cycles_log = self.logs_dir / "cycles.log"
         if not self.cycles_log.exists():
             self.cycles_log.touch()
+
+        self._adapt_thread = None
 
     def log_to_console(self, msg):
         """Callback for agent loop to print to prompt_toolkit console."""
@@ -227,21 +230,40 @@ class DirectorInterface:
         print_formatted_text(HTML(" 2. <ansicyan>Digital Employee Mode</ansicyan> (Execution on demand)"))
 
         selected_mode = "evolution"
-        while True:
+        _in_fork_state = False
+        _boot_state_file = self.boros_root / "session" / "loop_state.json"
+        if _boot_state_file.exists():
             try:
-                choice = session.prompt("Select [1/2]: ").strip()
-                if choice == "1":
-                    selected_mode = "evolution"
-                    print_formatted_text(HTML("<b><ansimagenta>Starting in Evolution Mode...</ansimagenta></b>\n"))
-                    break
-                elif choice == "2":
+                _boot_state = json.loads(_boot_state_file.read_text())
+                if _boot_state.get("agent_state") == "boros-fork":
+                    _in_fork_state = True
                     selected_mode = "employee"
-                    print_formatted_text(HTML("<b><ansicyan>Starting in Digital Employee Mode...</ansicyan></b>\n"))
-                    break
-                else:
-                    print_formatted_text(HTML("<ansiyellow>Invalid choice. Please enter 1 or 2.</ansiyellow>"))
-            except (KeyboardInterrupt, EOFError):
-                return
+                    _gen = _boot_state.get("generation", 0)
+                    _cycle = _boot_state.get("forked_at_cycle", "?")
+                    print_formatted_text(HTML(
+                        f"<b><ansimagenta>🔱 Resuming Boros-Fork  "
+                        f"(Gen {_gen} — forked at cycle {_cycle})</ansimagenta></b>"
+                    ))
+                    print_formatted_text(HTML("<ansicyan>Deployment mode active — awaiting tasks.</ansicyan>\n"))
+            except Exception:
+                pass
+
+        if not _in_fork_state:
+            while True:
+                try:
+                    choice = session.prompt("Select [1/2]: ").strip()
+                    if choice == "1":
+                        selected_mode = "evolution"
+                        print_formatted_text(HTML("<b><ansimagenta>Starting in Evolution Mode...</ansimagenta></b>\n"))
+                        break
+                    elif choice == "2":
+                        selected_mode = "employee"
+                        print_formatted_text(HTML("<b><ansicyan>Starting in Digital Employee Mode...</ansicyan></b>\n"))
+                        break
+                    else:
+                        print_formatted_text(HTML("<ansiyellow>Invalid choice. Please enter 1 or 2.</ansiyellow>"))
+                except (KeyboardInterrupt, EOFError):
+                    return
 
         state_file = self.boros_root / "session" / "loop_state.json"
         if state_file.exists():
@@ -251,12 +273,22 @@ class DirectorInterface:
                 state_file.write_text(json.dumps(state, indent=2))
             except Exception: pass
 
+        # Start adapt scheduler if resuming fork state
+        if _in_fork_state:
+            self._start_adapt_scheduler()
+
         # Start agent loop in background
         kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
         kernel_thread.start()
 
         print_formatted_text(HTML("<b><ansiblue>Boros Director Interface</ansiblue></b>"))
-        print_formatted_text(HTML("Commands: 'boros status', 'boros pause', 'boros resume', 'boros evolution', 'boros employee', or Ctrl+C to stop."))
+        print_formatted_text(HTML(
+            "Commands: <b>boros status</b> | <b>boros pause</b> | <b>boros resume</b> | "
+            "<b>boros evolution</b> | <b>boros employee</b> | "
+            "<b>boros fork</b> | <b>boros re-evolve</b> | "
+            "<b>boros adapt</b> | <b>boros adapt-config &lt;interval&gt;</b> (e.g. 2d, 1w, 12h, off) "
+            "| Ctrl+C to stop."
+        ))
 
         while True:
             try:
@@ -310,6 +342,14 @@ class DirectorInterface:
                     print_formatted_text(HTML("<b><ansicyan>🧑‍💻 Switching to Digital Employee Mode</ansicyan></b>"))
             else:
                 print_formatted_text(HTML("<ansiyellow>Loop state file missing; cannot change mode yet.</ansiyellow>"))
+        elif cmd == "fork":
+            self._handle_fork()
+        elif cmd == "re-evolve":
+            self._handle_re_evolve()
+        elif cmd == "adapt":
+            self._handle_adapt_now()
+        elif cmd.startswith("adapt-config "):
+            self._handle_adapt_config(cmd[len("adapt-config "):].strip())
         else:
             with open(self.pending_file, "r") as f:
                 data = json.load(f)
@@ -317,3 +357,256 @@ class DirectorInterface:
             with open(self.pending_file, "w") as f:
                 json.dump(data, f, indent=2)
             print_formatted_text(HTML(f"<ansiblue>Queued:</ansiblue> {escape(cmd)}"))
+
+    # ─────────────────────────────────────────────
+    # Fork / Re-Evolve / Adapt handlers
+    # ─────────────────────────────────────────────
+
+    def _handle_fork(self):
+        state_file = self.boros_root / "session" / "loop_state.json"
+        if not state_file.exists():
+            print_formatted_text(HTML("<ansiyellow>No loop state found. Start a session first.</ansiyellow>"))
+            return
+
+        state = json.loads(state_file.read_text())
+        if state.get("agent_state") == "boros-fork":
+            print_formatted_text(HTML(
+                "<ansiyellow>Already in boros-fork state. "
+                "Use 'boros re-evolve' to start next generation evolution.</ansiyellow>"
+            ))
+            return
+
+        # High-water marks become the fork's capability snapshot
+        hw_file = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
+        high_water = {}
+        if hw_file.exists():
+            try:
+                high_water = json.loads(hw_file.read_text())
+            except Exception:
+                pass
+
+        # Load or create lineage.json
+        lineage_file = self.boros_root / "lineage.json"
+        lineage = {"entries": []}
+        if lineage_file.exists():
+            try:
+                lineage = json.loads(lineage_file.read_text())
+            except Exception:
+                pass
+
+        generation = sum(1 for e in lineage.get("entries", []) if e.get("event") == "fork")
+
+        config = json.loads((self.boros_root / "config.json").read_text())
+        adaptation_interval = config.get("fork", {}).get("adaptation_interval", "2d")
+
+        # Append fork node to lineage
+        lineage["entries"].append({
+            "event": "fork",
+            "generation": generation,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "cycle_at_fork": state.get("cycle", 0),
+            "total_cycles_completed": state.get("total_cycles_completed", 0),
+            "agent_state": "boros-fork",
+            "high_water_marks": high_water,
+            "adaptation_interval": adaptation_interval
+        })
+        lineage_file.write_text(json.dumps(lineage, indent=2))
+
+        # Lock the mode
+        state["mode"] = "employee"
+        state["agent_state"] = "boros-fork"
+        state["forked_at_cycle"] = state.get("cycle", 0)
+        state["generation"] = generation
+        state_file.write_text(json.dumps(state, indent=2))
+
+        self._start_adapt_scheduler()
+
+        print_formatted_text(HTML(f"<b><ansimagenta>🔱 BOROS FORKED — Generation {generation}</ansimagenta></b>"))
+        print_formatted_text(HTML(f"<ansigreen>Forked at cycle {state['forked_at_cycle']}</ansigreen>"))
+        print_formatted_text(HTML(f"<ansicyan>Capability snapshot: {escape(json.dumps(high_water))}</ansicyan>"))
+        print_formatted_text(HTML(f"<ansiyellow>Adaptation scheduled every: {adaptation_interval}</ansiyellow>"))
+        print_formatted_text(HTML(
+            "<style fg='#8a8a8a'>Running as a pure work agent. "
+            "Use 'boros re-evolve' to begin next generation.</style>"
+        ))
+
+    def _handle_re_evolve(self):
+        state_file = self.boros_root / "session" / "loop_state.json"
+        if not state_file.exists():
+            print_formatted_text(HTML("<ansiyellow>No loop state found.</ansiyellow>"))
+            return
+
+        state = json.loads(state_file.read_text())
+
+        lineage_file = self.boros_root / "lineage.json"
+        lineage = {"entries": []}
+        if lineage_file.exists():
+            try:
+                lineage = json.loads(lineage_file.read_text())
+            except Exception:
+                pass
+
+        generation = sum(1 for e in lineage.get("entries", []) if e.get("event") == "fork")
+
+        # Read task log to seed the first REFLECT cycle
+        task_log_file = self.boros_root / "logs" / "task_log.jsonl"
+        recent_tasks = []
+        if task_log_file.exists():
+            try:
+                lines = [l for l in task_log_file.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+                recent_tasks = [json.loads(l) for l in lines[-50:]]
+            except Exception:
+                pass
+
+        adapt_seed = {
+            "source": "boros-fork field deployment data",
+            "generation": generation,
+            "task_count": len(recent_tasks),
+            "recent_tasks": recent_tasks[-10:],
+            "instruction": (
+                f"You are beginning evolution generation {generation}. "
+                "The tasks above are real requests users gave you during deployment. "
+                "Identify capability gaps — tasks that failed, had high retries, or had no skill to handle them. "
+                "Your first evolution targets should address these real-world gaps."
+            )
+        }
+        (self.boros_root / "session" / "adapt_seed.json").write_text(
+            json.dumps(adapt_seed, indent=2)
+        )
+
+        lineage["entries"].append({
+            "event": "re-evolve",
+            "generation": generation,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "tasks_since_fork": len(recent_tasks),
+            "world_model": "world_model.json"
+        })
+        lineage_file.write_text(json.dumps(lineage, indent=2))
+
+        state["mode"] = "evolution"
+        state["agent_state"] = "evolution"
+        state["generation"] = generation
+        state.pop("forked_at_cycle", None)
+        state_file.write_text(json.dumps(state, indent=2))
+
+        self.pause_requested = False
+        kernel_thread = threading.Thread(target=self.run_kernel_loop, daemon=True)
+        kernel_thread.start()
+
+        print_formatted_text(HTML(f"<b><ansimagenta>🔄 Re-Evolution Started — Generation {generation}</ansimagenta></b>"))
+        print_formatted_text(HTML(f"<ansicyan>Seeded with {len(recent_tasks)} tasks from field deployment.</ansicyan>"))
+        print_formatted_text(HTML(
+            "<ansigreen>Evolution loop restarted. "
+            "Edit world_model.json before running to target new capabilities.</ansigreen>"
+        ))
+
+    def _handle_adapt_now(self):
+        state_file = self.boros_root / "session" / "loop_state.json"
+        if state_file.exists():
+            try:
+                state = json.loads(state_file.read_text())
+                if state.get("agent_state") != "boros-fork":
+                    print_formatted_text(HTML(
+                        "<ansiyellow>Adapt is only available in boros-fork state. "
+                        "Run 'boros fork' first.</ansiyellow>"
+                    ))
+                    return
+            except Exception:
+                pass
+
+        print_formatted_text(HTML("<ansicyan>Running adaptation cycle...</ansicyan>"))
+        threading.Thread(target=self._run_adapt_engine, daemon=True).start()
+
+    def _handle_adapt_config(self, interval):
+        valid_units = ("h", "d", "w", "m")
+        if interval != "off" and not (len(interval) >= 2 and interval[-1] in valid_units and interval[:-1].isdigit()):
+            print_formatted_text(HTML(
+                f"<ansired>Invalid interval '{escape(interval)}'. "
+                "Use format: 2d, 1w, 12h, 30m, or 'off'</ansired>"
+            ))
+            return
+
+        config_path = self.boros_root / "config.json"
+        try:
+            config = json.loads(config_path.read_text())
+            if "fork" not in config:
+                config["fork"] = {}
+            config["fork"]["adaptation_interval"] = interval
+            config_path.write_text(json.dumps(config, indent=2))
+            print_formatted_text(HTML(f"<ansigreen>Adaptation interval set to: {escape(interval)}</ansigreen>"))
+            if interval != "off":
+                self._start_adapt_scheduler()
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>Failed to update config: {escape(str(e))}</ansired>"))
+
+    def _run_adapt_engine(self):
+        try:
+            import sys
+            sys.path.insert(0, str(self.boros_root.parent))
+            from boros.adapt_engine import AdaptEngine
+            engine = AdaptEngine(self.kernel, log_callback=self.log_to_console)
+            result = engine.run()
+            if result:
+                print_formatted_text(HTML("<ansigreen>✔ Adaptation complete — changes applied.</ansigreen>"))
+            else:
+                print_formatted_text(HTML("<ansiyellow>Adaptation cycle complete — no changes applied.</ansiyellow>"))
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>Adaptation engine error: {escape(str(e))}</ansired>"))
+
+    def _start_adapt_scheduler(self):
+        if self._adapt_thread and self._adapt_thread.is_alive():
+            return
+        self._adapt_thread = threading.Thread(target=self._adapt_scheduler_loop, daemon=True)
+        self._adapt_thread.start()
+
+    def _adapt_scheduler_loop(self):
+        """Background thread: fires adapt engine when the configured interval has elapsed."""
+        while not self.pause_requested:
+            try:
+                config_path = self.boros_root / "config.json"
+                config = json.loads(config_path.read_text())
+                fork_cfg = config.get("fork", {})
+                interval_str = fork_cfg.get("adaptation_interval", "off")
+
+                if interval_str == "off":
+                    time.sleep(60)
+                    continue
+
+                interval_seconds = self._parse_interval_seconds(interval_str)
+                if interval_seconds is None:
+                    time.sleep(60)
+                    continue
+
+                last_ts = fork_cfg.get("last_adapt_timestamp")
+                if last_ts:
+                    last_dt = datetime.datetime.fromisoformat(last_ts.rstrip("Z"))
+                    elapsed = (datetime.datetime.utcnow() - last_dt).total_seconds()
+                    if elapsed < interval_seconds:
+                        time.sleep(60)
+                        continue
+
+                # Only fire when still in fork state
+                state_file = self.boros_root / "session" / "loop_state.json"
+                if state_file.exists():
+                    state = json.loads(state_file.read_text())
+                    if state.get("agent_state") != "boros-fork":
+                        time.sleep(60)
+                        continue
+
+                self.log_to_console("[ADAPT] Scheduled adaptation triggered.")
+                self._run_adapt_engine()
+
+            except Exception:
+                pass
+
+            time.sleep(60)
+
+    def _parse_interval_seconds(self, interval_str):
+        if not interval_str or interval_str == "off":
+            return None
+        try:
+            unit = interval_str[-1]
+            value = int(interval_str[:-1])
+            return value * {"m": 60, "h": 3600, "d": 86400, "w": 604800}.get(unit, 0) or None
+        except Exception:
+            return None

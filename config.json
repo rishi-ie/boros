@@ -28,5 +28,10 @@
       "provider": "gemini",
       "model": "gemini-2.5-flash"
     }
+  },
+  "fork": {
+    "adaptation_interval": "2d",
+    "min_tasks_before_adapt": 10,
+    "last_adapt_timestamp": null
   }
 }
