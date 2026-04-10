@@ -4,8 +4,6 @@
 
 Boros runs an infinite loop where it rewrites its own internal skills, tests every change in an isolated sandbox, and rolls back anything that makes it worse. You configure what capabilities you want it to master — it figures out the rest.
 
-> Internal codename: Boros. Model name: ARES (Autonomous Recursive Evolving System). By Mumbrane Labs.
-
 ---
 
 ## How It Works
