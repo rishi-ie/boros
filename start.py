@@ -54,12 +54,10 @@ def main():
     ) as progress:
         task = progress.add_task("Starting eval engine...", total=None)
 
-        # Launch eval-generator — pipe its output to /dev/null, it's an implementation detail
+        # Launch eval-generator — allow logs to be visible to the user
         eval_proc = subprocess.Popen(
             [sys.executable, str(ROOT / "eval-generator" / "eval_generator.py")],
-            cwd=str(ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            cwd=str(ROOT)
         )
         ready_file = ROOT / "eval-generator" / "shared" / ".ready"
         for _ in range(30):
