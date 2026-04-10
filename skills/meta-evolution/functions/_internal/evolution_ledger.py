@@ -1,7 +1,6 @@
 """Evolution Ledger — The single source of truth for 'what worked?'
 
-FIX-05: This is THE critical fix. Every code change is now linked to its score impact.
-Without this, Boros has amnesia between cycles and cannot learn from its mistakes.
+Every code change is linked to its score impact so Boros can learn from past cycles.
 
 Ledger entry format:
 {
@@ -111,8 +110,8 @@ def get_regressions(boros_dir: str, limit: int = 10) -> list:
 
 
 def check_brute_force(boros_dir: str, target_file: str) -> dict:
-    """FIX-06: Check if this file was recently modified without improvement.
-    
+    """Check if this file was recently modified without improvement.
+
     Returns None if safe to proceed, or a block dict if brute-force detected.
     """
     history = get_file_history(boros_dir, target_file)

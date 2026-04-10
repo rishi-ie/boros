@@ -6,7 +6,6 @@ import importlib
 import sys
 from pathlib import Path
 
-# Auto-inject project root into python path for direct execution
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
@@ -24,7 +23,6 @@ class BorosKernel:
         self.boros_root = Path(__file__).parent
         self.registry = {}
 
-        # Load config and manifest
         self._load_config()
         self._load_manifest()
         self._validate_world_model()
@@ -32,12 +30,11 @@ class BorosKernel:
         self._load_skills()
 
 
-        # Initialize LLM providers (pass full config dict, not just provider string)
         try:
             self.evolution_llm = load_adapter(self.config["providers"]["evolution_api"])
             self.meta_eval_llm = load_adapter(self.config["providers"]["meta_eval_api"])
 
-            # Force early initialization to ensure keys are valid
+            # Eagerly initialize clients to surface missing API keys at boot
             if hasattr(self.evolution_llm, "client"):
                 _ = self.evolution_llm.client
             if hasattr(self.meta_eval_llm, "client"):
@@ -58,7 +55,6 @@ class BorosKernel:
             print("First boot detected. Initializing seed state...")
             session_dir.mkdir(parents=True, exist_ok=True)
 
-            # Create directories
             dirs = [
                 "tasks/queue", "tasks/active", "tasks/completed", "tasks/learning",
                 "snapshots", "evals/scores", "commands",
@@ -68,7 +64,7 @@ class BorosKernel:
             for d in dirs:
                 (boros_dir / d).mkdir(parents=True, exist_ok=True)
 
-            # Derive evals/categories.json from world_model.json
+            # Seed evals/categories.json from world_model.json
             categories = {}
             wm_path = boros_dir / "world_model.json"
             if wm_path.exists():
@@ -86,14 +82,14 @@ class BorosKernel:
             with open(boros_dir / "evals" / "categories.json", "w") as f:
                 json.dump(categories, f, indent=2)
 
-            # Initialize high_water_marks.json
+            # Seed high_water_marks.json
             high_water = {cat: 0.0 for cat in categories.keys()}
             hw_dir = boros_dir / "skills" / "eval-bridge" / "state"
             hw_dir.mkdir(parents=True, exist_ok=True)
             with open(hw_dir / "high_water_marks.json", "w") as f:
                 json.dump(high_water, f, indent=2)
 
-            # Initialize loop_state.json
+            # Seed loop_state.json
             with open(session_dir / "loop_state.json", "w") as f:
                 json.dump({
                     "cycle": 0,
@@ -103,16 +99,14 @@ class BorosKernel:
                     "total_cycles_completed": 0
                 }, f, indent=2)
 
-            # Create pending commands
+            # Seed pending commands queue
             with open(boros_dir / "commands" / "pending.json", "w") as f:
                 json.dump({"pending": []}, f)
 
-            # Finish initialization mark
             with open(cycle_file, "w") as f:
                 json.dump({"cycle": 0}, f)
             print("Seed state initialized successfully.")
 
-        # ── Always sync world model → categories.json and high_water_marks.json ──
         self._sync_world_model_state(boros_dir)
 
     def _load_config(self):
@@ -202,27 +196,33 @@ class BorosKernel:
             self.manifest = json.load(f)
 
     def _validate_world_model(self):
-        """Ensure world_model.json has the required structure (FIX-04)."""
+        """Ensure world_model.json has the required structure."""
         wm_path = self.boros_root / "world_model.json"
         if not wm_path.exists():
             return
-        
+
         try:
             with open(wm_path) as f:
                 wm = json.load(f)
 
-            assert "categories" in wm, "world_model.json must have 'categories' key"
+            if "categories" not in wm:
+                raise ValueError("world_model.json must have 'categories' key")
             cats = wm["categories"]
-            assert isinstance(cats, dict), "'categories' must be a dict"
-            assert len(cats) > 0, "'categories' must have at least one category"
+            if not isinstance(cats, dict):
+                raise ValueError("'categories' must be a dict")
+            if not cats:
+                raise ValueError("'categories' must have at least one category")
 
             for cat_id, cat_data in cats.items():
                 required = ["weight", "anchors", "rubric", "failure_modes", "related_skills"]
                 for field in required:
-                    assert field in cat_data, f"Category '{cat_id}' missing required field '{field}'"
-                assert isinstance(cat_data["related_skills"], list), f"'{cat_id}.related_skills' must be a list"
-                assert cat_data["weight"] > 0, f"'{cat_id}.weight' must be positive"
-        except AssertionError as e:
+                    if field not in cat_data:
+                        raise ValueError(f"Category '{cat_id}' missing required field '{field}'")
+                if not isinstance(cat_data["related_skills"], list):
+                    raise ValueError(f"'{cat_id}.related_skills' must be a list")
+                if not cat_data["weight"] > 0:
+                    raise ValueError(f"'{cat_id}.weight' must be positive")
+        except ValueError as e:
             print(f"[Kernel] FATAL ERROR: world_model.json validation failed: {e}")
             sys.exit(1)
         except json.JSONDecodeError as e:
@@ -247,7 +247,6 @@ class BorosKernel:
             except Exception as e:
                 print(f"[KERNEL] WARNING: Failed to load skill '{skill_name}': {e}")
                 failed_skills.append({"skill": skill_name, "error": str(e)})
-                # Don't raise — continue loading other skills
 
         if failed_skills:
             print(f"[KERNEL] {len(failed_skills)} skills failed to load: {[s['skill'] for s in failed_skills]}")
@@ -258,7 +257,7 @@ class BorosKernel:
                 with open(session_dir / "failed_skills.json", "w") as f:
                     json.dump(failed_skills, f, indent=2)
             except Exception:
-                pass  # Don't let logging failure prevent boot
+                pass
 
     def reload_skill(self, skill_name: str):
         print(f"[Kernel] Dynamically reloading skill: {skill_name}")
@@ -268,28 +267,18 @@ class BorosKernel:
 
         module_path = f"boros.skills.{skill_name}.functions"
 
-        # 1. Reload specific function submodules to ensure fresh code
         for func_name in s_info.get("provided_functions", []):
             sub_path = f"{module_path}.{func_name}"
             if sub_path in sys.modules:
                 importlib.reload(sys.modules[sub_path])
 
-        # 2. Reload the main __init__ module to capture re-exported function pointers
         if module_path in sys.modules:
             module = importlib.reload(sys.modules[module_path])
         else:
             module = importlib.import_module(module_path)
 
-        # 3. Re-bind fresh functions to registry
         for func_name in s_info.get("provided_functions", []):
             if hasattr(module, func_name):
                 self.registry[func_name] = getattr(module, func_name)
 
         return True
-
-if __name__ == "__main__":
-    kernel = BorosKernel()
-    import importlib
-    interface_module = importlib.import_module("boros.skills.director-interface.functions.interface")
-    ui = interface_module.DirectorInterface(kernel)
-    ui.run()

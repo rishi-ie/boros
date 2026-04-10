@@ -9,7 +9,7 @@ def loop_start(params: dict, kernel=None) -> dict:
     session_state_file = os.path.join(session_dir, "loop_state.json")
     cycle_file = os.path.join(session_dir, "current_cycle.json")
 
-    # ── FIX-02: Crash-safe recovery ──────────────────────────────────────
+    # Crash-safe recovery: detect incomplete previous cycle and roll back
     crashed = False
     crash_details = {}
     if os.path.exists(session_state_file):
@@ -24,7 +24,7 @@ def loop_start(params: dict, kernel=None) -> dict:
                 crash_details["crashed_cycle"] = prev_state.get("cycle", "unknown")
                 print(f"[loop_start] WARNING: Previous cycle crashed in stage '{prev_stage}'. Running aggressive recovery.")
 
-                # 1. Always try to rollback from evolution_target snapshot
+                # Roll back to the last snapshot if one was recorded
                 target_file = os.path.join(session_dir, "evolution_target.json")
                 if os.path.exists(target_file):
                     try:
@@ -44,7 +44,7 @@ def loop_start(params: dict, kernel=None) -> dict:
                         crash_details["rollback_error"] = str(e)
                         print(f"[CRASH RECOVERY] Rollback failed: {e}")
 
-                # 2. Clean up ALL stale session files
+                # Clean up stale session files
                 stale_files = ["hypothesis.json", "evolution_target.json", "review_feedback.json",
                                "pending_eval.json"]
                 for stale in stale_files:
@@ -64,7 +64,7 @@ def loop_start(params: dict, kernel=None) -> dict:
                         except OSError:
                             pass
 
-                # 3. Write crash record to evolution_records for learning
+                # Record the crash for learning
                 try:
                     crash_record = {
                         "type": "crash_recovery",
@@ -85,7 +85,6 @@ def loop_start(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # ── Read current cycle number ──────────────────────────────
     cycle_num = 1
     if os.path.exists(cycle_file):
         try:
@@ -94,7 +93,6 @@ def loop_start(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # ── Keep existing mode ─────────────────────────────────────
     current_mode = "evolution"
     if os.path.exists(session_state_file):
         try:

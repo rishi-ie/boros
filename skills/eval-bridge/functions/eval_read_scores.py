@@ -37,7 +37,7 @@ def eval_read_scores(params: dict, kernel=None) -> dict:
     wm_version = _get_world_model_version(boros_dir)
 
     def _rotate_score_history(score_hist):
-        """FIX-13: Keep only the last MAX_HISTORY_LINES entries."""
+        """Keep only the last MAX_HISTORY_LINES entries."""
         MAX_HISTORY_LINES = 500
         if not os.path.exists(score_hist):
             return

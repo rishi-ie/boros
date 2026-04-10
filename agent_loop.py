@@ -6,7 +6,10 @@ parses tool_use responses, dispatches them through the kernel registry,
 and loops until the LLM ends its turn or limits are reached.
 """
 
+import importlib
 import json
+import platform
+import random
 import time
 import traceback
 from pathlib import Path
@@ -113,7 +116,7 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 6. Past hypothesis outcomes — DO NOT REPEAT FAILED APPROACHES
+        # 5. Past hypothesis outcomes — DO NOT REPEAT FAILED APPROACHES
         hyp_records_dir = self.boros_root / "memory" / "evolution_records"
         if hyp_records_dir.exists():
             try:
@@ -147,9 +150,8 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 6a. FIX-10: Surface Failures in System Prompt
+        # 6. Surface regression warnings
         try:
-            import importlib
             ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
             
             regressions = ledger.query_ledger(str(self.boros_root), outcome="regressed", limit=10)
@@ -176,7 +178,7 @@ class AgentLoop:
         except Exception:
             pass
 
-        # 6b. Active hypothesis (Task Binding)
+        # 7. Active hypothesis
         hyp_file = self.boros_root / "session" / "hypothesis.json"
         if hyp_file.exists():
             try:
@@ -184,7 +186,7 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 7. High-water marks
+        # 8. High-water marks
         hw_file = self.boros_root / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
         if hw_file.exists():
             try:
@@ -192,7 +194,7 @@ class AgentLoop:
             except Exception:
                 pass
 
-        # 8. Bootstrap mode — if no scores exist, force immediate eval
+        # 9. Bootstrap mode — if no scores exist, force immediate eval
         if not has_scores:
             parts.append(
                 "## ⚡ BOOTSTRAP MODE — CRITICAL INSTRUCTION\n"
@@ -206,8 +208,7 @@ class AgentLoop:
                 "**DO NOT target eval-bridge. DO NOT write hypotheses. Just get scores first.**"
             )
 
-        # 9. Environment reminder (platform-aware)
-        import platform
+        # 10. Environment reminder
         os_name = platform.system()
         if os_name == "Windows":
             env_note = (
@@ -335,8 +336,7 @@ class AgentLoop:
     # ────────────────────────────────────────────
 
     def run_evolution_cycle(self):
-        # Sync world_model.json → categories.json + high_water_marks.json every cycle
-        # so mid-run edits to world_model.json are picked up without restart
+        # Sync world model state so live edits to world_model.json are picked up
         try:
             self.kernel._sync_world_model_state(self.boros_root)
         except Exception:
@@ -385,7 +385,7 @@ class AgentLoop:
                     if block.get("type") == "text" and block.get("text"):
                         self.log(f"[BOROS] {block['text'][:800]}")
 
-                # Log usage and enforce FIX-19 token budget
+                # Track tokens and enforce budget
                 if usage:
                     in_tok = usage.get('input_tokens', 0)
                     out_tok = usage.get('output_tokens', 0)
@@ -415,7 +415,7 @@ class AgentLoop:
                         inp = block.get("input", {})
                         tid = block["id"]
                         
-                        # FIX-17: Deduplicate identical non-polling tool calls
+                        # Deduplicate identical non-polling tool calls
                         sig = (name, json.dumps(inp, sort_keys=True))
                         is_polling = name in ("eval_read_scores", "tool_terminal_input", "router_get_budget")
                         is_duplicate = (sig in executed_tools) and not is_polling
@@ -621,7 +621,6 @@ class AgentLoop:
         """Run evolution cycles until paused."""
         cycle_num = 0
         fail_count = 0
-        import random
         while True:
             if should_pause and should_pause():
                 self.log("[LOOP] Pause requested.")

@@ -3,14 +3,11 @@ import os, json, uuid, datetime
 from .validate import validate_skill_syntax
 
 def evolve_propose(params: dict, kernel=None) -> dict:
-    """Create a formal evolution proposal. Stores proposal artifact in session.
-    
-    FIX-11: Requires a hypothesis before allowing proposals.
-    FIX-06: Checks anti-brute-force before allowing modifications.
-    """
+    """Create a formal evolution proposal. Requires a hypothesis and passes
+    the anti-brute-force check before storing the proposal artifact in session."""
     boros_dir = str(kernel.boros_root) if kernel else "boros"
 
-    # ── FIX-11: Enforce hypothesis requirement ───────────────────
+    # Require a hypothesis before allowing proposals
     hyp_file = os.path.join(boros_dir, "session", "hypothesis.json")
     if not os.path.exists(hyp_file):
         return {
@@ -30,7 +27,7 @@ def evolve_propose(params: dict, kernel=None) -> dict:
             "message": "Hypothesis must have 'rationale' and 'expected_improvement' fields."
         }
 
-    # ── FIX-06: Anti-brute-force check ───────────────────────────
+    # Anti-brute-force check: block if this file failed twice recently
     proposal_target_file = params.get("target_file", "")
     if proposal_target_file:
         try:
@@ -45,7 +42,7 @@ def evolve_propose(params: dict, kernel=None) -> dict:
         except Exception:
             pass  # Ledger not available yet — don't block on first run
 
-    # ── Validate syntax before proposing ─────────────────────────
+    # Validate syntax before accepting proposal
     target_to_validate = params.get("target", params.get("skill_name"))
     if target_to_validate and kernel:
         if 'forge_validate' in kernel.registry:

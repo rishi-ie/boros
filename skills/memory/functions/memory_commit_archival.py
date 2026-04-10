@@ -16,7 +16,7 @@ def memory_commit_archival(params: dict, kernel=None) -> dict:
         if not all(phrase in content for phrase in required_phrases):
             return {"status": "error", "message": f"For entry_type '{entry_type}', content must explicitly include all of: {required_phrases}. Received: '{content}'"}
             
-        # FIX-16: Reject empty experiences
+        # Reject empty or thin content
         if len(content.strip()) < 100:
             return {"status": "error", "message": "Experience content is too short to be meaningful. Write at least 100 characters detailing the context, action, and outcome."}
             

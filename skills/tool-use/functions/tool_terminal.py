@@ -13,7 +13,7 @@ MAX_BACKGROUND_JOBS = 3
 JOB_TIMEOUT_SECONDS = 300  # 5 minutes
 
 def _cleanup_expired_jobs():
-    """Kill background jobs that exceeded their timeout (FIX-20)."""
+    """Kill background jobs that exceeded their timeout."""
     now = time.time()
     expired = [jid for jid, info in active_jobs.items()
                if isinstance(info, dict) and now - info.get("started_at", 0) > JOB_TIMEOUT_SECONDS]
@@ -23,7 +23,7 @@ def _cleanup_expired_jobs():
         except Exception:
             pass
         del active_jobs[jid]
-    # Also clean up legacy entries that are just Popen objects (pre-FIX-20)
+    # Also clean up legacy entries that are bare Popen objects
     legacy_expired = []
     for jid, val in active_jobs.items():
         if not isinstance(val, dict):
@@ -44,7 +44,7 @@ def tool_terminal(params: dict, kernel=None) -> dict:
         log.error("tool_terminal: No command provided.")
         return {"status": "error", "message": "No command provided."}
     
-    # FIX-01: Block dangerous commands
+    # Block dangerous commands
     dangerous, reason = is_command_dangerous(command)
     if dangerous:
         log.warning(f"tool_terminal: BLOCKED dangerous command: {command}")
@@ -53,7 +53,6 @@ def tool_terminal(params: dict, kernel=None) -> dict:
     log.info(f"tool_terminal: Executing command: {command}, background: {background}")
 
     if background:
-        # FIX-20: Job lifecycle management
         _cleanup_expired_jobs()
         if len(active_jobs) >= MAX_BACKGROUND_JOBS:
             return {"status": "error", "message": f"Max {MAX_BACKGROUND_JOBS} background jobs reached. Kill one first."}

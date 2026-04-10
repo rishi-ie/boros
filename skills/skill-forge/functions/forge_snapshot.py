@@ -61,7 +61,7 @@ def forge_snapshot(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass  # non-fatal — crash recovery just won't have the id
 
-    # FIX-14: Enforce snapshot retention
+    # Enforce snapshot retention (prune old ones)
     snapshots_dir = os.path.join(boros_dir, "snapshots")
     def _enforce_retention(snapshots_dir, keep_last=20):
         if not os.path.isdir(snapshots_dir):

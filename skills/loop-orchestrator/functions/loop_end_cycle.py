@@ -3,13 +3,8 @@ import os, json, datetime, uuid
 
 
 def loop_end_cycle(params: dict, kernel=None) -> dict:
-    """End the current evolution cycle with full outcome recording.
-    
-    This function is now the integration point for:
-    - FIX-05: Evolution ledger recording (change → outcome tracking)
-    - FIX-07: Automatic regression rollback (no LLM decision needed)
-    - FIX-08: Knowledge graph triple writing
-    """
+    """End the current evolution cycle. Records outcome to the evolution ledger,
+    updates high-water marks, writes KG triples, and cleans session state."""
     boros_dir = str(kernel.boros_root) if kernel else "boros"
 
     state_file = os.path.join(boros_dir, "session", "loop_state.json")
@@ -24,7 +19,6 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     else:
         cycle = 0
 
-    # ── Read hypothesis ──────────────────────────────────────────
     hyp_file = os.path.join(boros_dir, "session", "hypothesis.json")
     hypothesis = {}
     if os.path.exists(hyp_file):
@@ -34,7 +28,6 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # ── Read evolution target ────────────────────────────────────
     target_data = {}
     target_file_path = os.path.join(boros_dir, "session", "evolution_target.json")
     if os.path.exists(target_file_path):
@@ -48,7 +41,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     snapshot_id = target_data.get("snapshot_id", "")
     target_file = target_data.get("target_file", "")
 
-    # ── Compute score delta ──────────────────────────────────────
+    # Compute score delta
     score_hist_path = os.path.join(boros_dir, "memory", "score_history.jsonl")
     score_before, score_after, outcome = {}, {}, "unknown"
     delta = None
@@ -72,17 +65,8 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     before_val = None
     after_val = None
     if target_cat and target_cat in score_after:
-        # Exact match first
         after_val = score_after[target_cat]
         before_val = score_before.get(target_cat)
-    else:
-        # Fallback: try exact match against all categories
-        for cat, val in score_after.items():
-            if cat == target_cat:
-                after_val = val
-                before_val = score_before.get(cat)
-                target_cat = cat
-                break
 
     if before_val is not None and after_val is not None:
         delta = round(after_val - before_val, 4)
@@ -95,7 +79,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     elif after_val is not None:
         outcome = "baseline"
 
-    # ── FIX-07: Read Auto-Rollback Status from eval_check_regression ──
+    # Read auto-rollback status written by eval_check_regression
     auto_rollback = None
     records_dir = os.path.join(boros_dir, "memory", "evolution_records")
     rollback_file = os.path.join(records_dir, f"rollback-cycle{cycle}.json")
@@ -111,10 +95,8 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             outcome = "regressed"
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: Failed to read rollback data: {e}")
-    # Regressions without rollback files are still regressions — do NOT mask them.
-    # The ledger and anti-brute-force mechanism need accurate outcome data.
 
-    # ── FIX-05: Write evolution ledger entry ──────────────────────
+    # Write evolution ledger entry
     # Read proposal info if available
     proposal_id = ""
     approach = hypothesis.get("rationale", params.get("description", ""))
@@ -146,8 +128,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             pass
 
     try:
-        # Import ledger using file path (not module path — hyphens in directory names
-        # break importlib.import_module)
+        # importlib.util is required because the hyphen in "meta-evolution" breaks importlib.import_module
         import importlib.util
         _ledger_path = os.path.join(boros_dir, "skills", "meta-evolution", "functions", "_internal", "evolution_ledger.py")
         _spec = importlib.util.spec_from_file_location("evolution_ledger", _ledger_path)
@@ -174,7 +155,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     except Exception as e:
         print(f"[loop_end_cycle] WARNING: Failed to write evolution ledger: {e}")
 
-    # ── FIX-08: Write Knowledge Graph triples ────────────────────
+    # Write knowledge graph triples
     if kernel and "memory_kg_write" in kernel.registry:
         try:
             kg = kernel.registry["memory_kg_write"]
@@ -197,7 +178,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: KG write failed: {e}")
 
-    # ── Archive hypothesis with full outcome data ────────────────
+    # Archive hypothesis with outcome data
     hypothesis_archived = False
     if hypothesis:
         try:
@@ -223,7 +204,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: hypothesis archival failed: {e}")
 
-    # ── Auto-update high-water marks from latest scores ──────────
+    # Update high-water marks
     hw_updated = {}
     if score_after and kernel and "eval_update_high_water" in kernel.registry:
         try:
@@ -232,7 +213,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: high-water mark update failed: {e}")
 
-    # ── Check milestone advancement ──────────────────────────────
+    # Check for milestone advancement
     if kernel and "eval_check_milestone" in kernel.registry:
         try:
             milestone_result = kernel.registry["eval_check_milestone"]({}, kernel)
@@ -241,7 +222,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: milestone check failed: {e}")
 
-    # ── Clean up session artifacts ───────────────────────────────
+    # Clean up session artifacts
     session_dir = os.path.join(boros_dir, "session")
     keep = {"loop_state.json", "current_cycle.json"}
     if os.path.isdir(session_dir):
@@ -261,7 +242,7 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
                 except OSError:
                     pass
 
-    # ── Log ──────────────────────────────────────────────────────
+    # Log cycle end
     log_file = os.path.join(boros_dir, "logs", "cycles.log")
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
     with open(log_file, "a") as f:

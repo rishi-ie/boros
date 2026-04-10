@@ -14,7 +14,7 @@ def tool_file_edit_diff(params: dict, kernel=None) -> dict:
 
     if not os.path.exists(target_file): return {"status": "error", "message": f"file not found: {target_file}"}
     
-    # FIX-01: Enforce path protection
+    # Enforce path protection
     if kernel:
         protected, reason = is_path_protected(target_file, str(kernel.boros_root))
         if protected:

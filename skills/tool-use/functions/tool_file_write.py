@@ -18,7 +18,7 @@ def tool_file_write(params: dict, kernel=None) -> dict:
     else:
         full_path = path
 
-    # FIX-01: Enforce path protection
+    # Enforce path protection
     if kernel:
         protected, reason = is_path_protected(full_path, str(kernel.boros_root))
         if protected:

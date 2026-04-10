@@ -14,7 +14,7 @@ def eval_request(params: dict, kernel=None) -> dict:
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z"
     }
 
-    # FIX-18: Health check with heartbeat (warn if eval-generator isn't running or is silent)
+    # Check eval-generator heartbeat (warn if not running or stale)
     ready_file = os.path.join(boros_dir, "eval-generator", "shared", ".ready")
     is_alive = False
     import time

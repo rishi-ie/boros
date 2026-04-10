@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys; sys.path.insert\\(0, '/e/code/vrenv22'\\); from boros.kernel import BorosKernel; k = BorosKernel\\(\\); print\\('Kernel loaded successfully'\\); print\\('Registry keys:', len\\(k.registry\\)\\); print\\('Sample tools:', list\\(k.registry.keys\\(\\)\\)[:5]\\)\")",
+      "Bash(grep:*)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('E:/code/vrenv22/boros/agent_loop.py'\\).read\\(\\)\\); print\\('agent_loop.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('E:/code/vrenv22/boros/kernel.py'\\).read\\(\\)\\); print\\('kernel.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('E:/code/vrenv22/boros/agent_loop.py', encoding='utf-8'\\).read\\(\\)\\); print\\('agent_loop.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('E:/code/vrenv22/boros/kernel.py', encoding='utf-8'\\).read\\(\\)\\); print\\('kernel.py OK'\\)\")",
+      "Bash(python:*)"
+    ]
+  }
+}

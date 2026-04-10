@@ -21,9 +21,6 @@ TOOL_SCHEMAS = {
     "mode_set": _s("mode_set", "Set the operating mode.", {"mode": {"type": "string", "enum": ["evolution", "supervised", "maintenance"]}}, ["mode"]),
 
 
-
-
-
     # ── Memory ──
     "memory_page_in": _s("memory_page_in", "Load data from long-term memory into session context. For evolution_records, use skill= to filter by target skill and outcome= to filter by result (improved/regressed/neutral/baseline). For experiences, use tags= to filter by tag list.", {"source": {"type": "string", "enum": ["scores", "experiences", "evolution_records", "sessions", "session_buffer"]}, "limit": {"type": "integer", "default": 10}, "skill": {"type": "string", "description": "Filter evolution_records by target_skill (partial match)"}, "outcome": {"type": "string", "enum": ["improved", "regressed", "neutral", "baseline"], "description": "Filter evolution_records by actual_outcome"}, "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter experiences by tags (any match)"}}, ["source"]),
     "memory_page_out": _s("memory_page_out", "Write key-value data to the current session buffer.", {"key": {"type": "string"}, "value": {"type": "string"}}, ["key", "value"]),
@@ -74,15 +71,11 @@ TOOL_SCHEMAS = {
     "forge_read_skill_md": _s("forge_read_skill_md", "Read the SKILL.md for a skill. Returns full content and parsed sections. Use before editing.", {"skill_name": {"type": "string"}}, ["skill_name"]),
     "forge_edit_skill_md": _s("forge_edit_skill_md", "Edit a specific section of a SKILL.md file. This is Escalation Ladder Step 1 — always try semantic changes before code changes.", {"skill_name": {"type": "string"}, "section_name": {"type": "string", "description": "The ## section header to replace (e.g. 'Role', 'Rules', 'Pipeline')"}, "new_content": {"type": "string", "description": "The new content for this section"}}, ["skill_name", "section_name", "new_content"]),
 
-
-
     # ── Reasoning ──
     "reason_decompose": _s("reason_decompose", "Decompose a complex problem into sub-problems. Returns structured breakdown.", {"problem": {"type": "string"}}, ["problem"]),
     "reason_evaluate_options": _s("reason_evaluate_options", "Evaluate multiple options against criteria. Returns ranked assessment.", {"options": {"type": "array", "items": {"type": "string"}}, "criteria": {"type": "string"}}, ["options", "criteria"]),
     "reason_check_logic": _s("reason_check_logic", "Check an argument for logical consistency. Returns assessment.", {"argument": {"type": "string"}}, ["argument"]),
     "reason_generate_plan": _s("reason_generate_plan", "Generate a structured step-by-step execution plan for a complex problem.", {"problem": {"type": "string"}}, ["problem"]),
-
-
 
     # ── Tool Use ──
     "tool_terminal": _s("tool_terminal", "Execute a shell command. Returns stdout, stderr, returncode. Use background=true for long-running processes.", {"command": {"type": "string"}, "background": {"type": "boolean", "default": False}}, ["command"]),
@@ -90,8 +83,6 @@ TOOL_SCHEMAS = {
     "tool_terminal_kill": _s("tool_terminal_kill", "Terminate a background job.", {"job_id": {"type": "string"}}, ["job_id"]),
     "tool_file_edit_diff": _s("tool_file_edit_diff", "Apply surgical find-and-replace patches to a file. Each chunk replaces the first occurrence of target_content with replacement_content.", {"target_file": {"type": "string"}, "replacement_chunks": {"type": "array", "items": {"type": "object", "properties": {"target_content": {"type": "string"}, "replacement_content": {"type": "string"}}, "required": ["target_content", "replacement_content"]}}}, ["target_file", "replacement_chunks"]),
     "tool_file_write": _s("tool_file_write", "Write content to a file, creating it if it doesn't exist. Use this to create new Python skill functions from scratch. Python files are syntax-checked before confirming.", {"path": {"type": "string"}, "content": {"type": "string"}}, ["path", "content"]),
-
-
 
     # ── Web Research ──
     "research_browse": _s("research_browse", "Fetch and read content from a URL.", {"url": {"type": "string"}}, ["url"]),
@@ -104,5 +95,5 @@ TOOL_SCHEMAS = {
     "eval_backfill": _s("eval_backfill", "Backfill missing scores for a given cycle.", {"cycle": {"type": "integer"}}, ["cycle"]),
     "eval_check_regression": _s("eval_check_regression", "Compare current scores against high-water marks. Auto-rollbacks on regression.", {"current_scores": {"type": "object"}}, ["current_scores"]),
     "eval_update_high_water": _s("eval_update_high_water", "Update high-water marks if current scores exceed them.", {"scores": {"type": "object"}}, ["scores"]),
-    "eval_check_milestone": _s("eval_check_milestone", "Check if any category has cleared its current milestone and advance world_model.json if so. Call after each eval.", {}),
+    "eval_check_milestone": _s("eval_check_milestone", "Check if any category has cleared its current milestone and advance world_model.json if so. Call after each eval."),
 }

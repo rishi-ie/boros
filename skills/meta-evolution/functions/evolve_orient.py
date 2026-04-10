@@ -174,7 +174,7 @@ def evolve_orient(params: dict, kernel=None) -> dict:
     if not fresh_targets:
         fresh_targets = skill_targets  # all were recent, use all
 
-    # FIX-06: Filter out blocked files (anti-brute-force)
+    # Filter out blocked files (anti-brute-force)
     try:
         import importlib.util
         _lp = os.path.join(boros_dir, "skills", "meta-evolution", "functions", "_internal", "evolution_ledger.py")
@@ -208,7 +208,7 @@ def evolve_orient(params: dict, kernel=None) -> dict:
     if weakest_score == float("inf"):
         weakest_score = 999.0
 
-    # FIX-08: Activate Knowledge Graph (query history for candidates)
+    # Query knowledge graph for evolution history on candidates
     kg_data = []
     if kernel and "memory_kg_query" in kernel.registry and related_skills:
         try:
