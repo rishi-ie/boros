@@ -7,7 +7,12 @@ def tool_file_edit_diff(params: dict, kernel=None) -> dict:
     replacement_chunks = params.get("replacement_chunks", [])
     
     if not target_file: return {"status": "error", "message": "target_file required"}
-    if not os.path.exists(target_file): return {"status": "error", "message": "file not found"}
+
+    # Resolve relative paths to boros root (matches tool_file_write behavior)
+    if kernel and not os.path.isabs(target_file):
+        target_file = os.path.join(str(kernel.boros_root), target_file)
+
+    if not os.path.exists(target_file): return {"status": "error", "message": f"file not found: {target_file}"}
     
     # FIX-01: Enforce path protection
     if kernel:

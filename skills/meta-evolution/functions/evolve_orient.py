@@ -176,8 +176,11 @@ def evolve_orient(params: dict, kernel=None) -> dict:
 
     # FIX-06: Filter out blocked files (anti-brute-force)
     try:
-        import importlib
-        ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+        import importlib.util
+        _lp = os.path.join(boros_dir, "skills", "meta-evolution", "functions", "_internal", "evolution_ledger.py")
+        _sp = importlib.util.spec_from_file_location("evolution_ledger", _lp)
+        ledger = importlib.util.module_from_spec(_sp)
+        _sp.loader.exec_module(ledger)
         unblocked = []
         for t in fresh_targets:
             if not ledger.check_brute_force(boros_dir, t["file"]):

@@ -12,6 +12,7 @@ tasks/active/*
 tasks/completed/*
 tasks/learning/*
 evals/scores/*
+evals/categories.json
 commands/*
 memory/evolution_records/*
 memory/experiences/*

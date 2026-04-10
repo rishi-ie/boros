@@ -34,8 +34,11 @@ def evolve_propose(params: dict, kernel=None) -> dict:
     proposal_target_file = params.get("target_file", "")
     if proposal_target_file:
         try:
-            import importlib
-            ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+            import importlib.util
+            _lp = os.path.join(boros_dir, "skills", "meta-evolution", "functions", "_internal", "evolution_ledger.py")
+            _sp = importlib.util.spec_from_file_location("evolution_ledger", _lp)
+            ledger = importlib.util.module_from_spec(_sp)
+            _sp.loader.exec_module(ledger)
             block = ledger.check_brute_force(boros_dir, proposal_target_file)
             if block:
                 return block

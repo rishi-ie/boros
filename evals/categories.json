@@ -1,6 +1,0 @@
-{
-  "memory": {
-    "name": "Cognitive Memory System",
-    "description": "Boros maintains a persistent, evolving memory system that mimics human cognition through episodic storage, semantic abstraction, associative recall, and dynamic reinforcement."
-  }
-}

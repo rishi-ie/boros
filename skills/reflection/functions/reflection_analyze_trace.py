@@ -1,5 +1,5 @@
 
-import os, json, glob
+import os, json
 def reflection_analyze_trace(params: dict, kernel=None) -> dict:
     """Analyze score history to identify trends, weaknesses, and opportunities."""
     boros_dir = str(kernel.boros_root) if kernel else "boros"
@@ -19,21 +19,12 @@ def reflection_analyze_trace(params: dict, kernel=None) -> dict:
                         pass
     recent = entries[-last_n:] if entries else []
 
-    # Read eval results directory
-    results_dir = os.path.join(boros_dir, "eval-generator", "shared", "results")
-    eval_results = []
-    if os.path.isdir(results_dir):
-        for rf in sorted(glob.glob(os.path.join(results_dir, "*.json")))[-last_n:]:
-            try:
-                with open(rf) as f:
-                    eval_results.append(json.load(f))
-            except Exception:
-                pass
-
-    # Aggregate scores by category
+    # Aggregate scores by category (score_history.jsonl is the single source of truth —
+    # eval_read_scores already appends results there, so reading the results dir too
+    # would double-count every score)
     category_scores = {}
-    for entry in recent + eval_results:
-        scores = entry.get("scores", entry)
+    for entry in recent:
+        scores = entry.get("scores", {})
         if isinstance(scores, dict):
             for cat, score in scores.items():
                 if isinstance(score, (int, float)):
@@ -82,8 +73,8 @@ def reflection_analyze_trace(params: dict, kernel=None) -> dict:
 
     # Extract detailed feedback for the weakest category from recent eval results
     feedback = {"quality_reason": "Not provided", "outcome_details": "No specific failures logged"}
-    if weakest_category and eval_results:
-        latest = eval_results[-1]
+    if weakest_category and recent:
+        latest = recent[-1]
         breakdown = latest.get("scoring_breakdown", {}).get(weakest_category, {})
         feedback["quality_reason"] = breakdown.get("quality_reason", feedback["quality_reason"])
         feedback["outcome_details"] = breakdown.get("outcome_details", feedback["outcome_details"])

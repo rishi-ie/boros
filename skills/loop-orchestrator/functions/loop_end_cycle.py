@@ -71,12 +71,18 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
     # Determine outcome for the target category
     before_val = None
     after_val = None
-    for cat, val in score_after.items():
-        if cat in target_cat or target_cat in cat:
-            after_val = val
-            before_val = score_before.get(cat)
-            target_cat = cat  # resolve to exact category name
-            break
+    if target_cat and target_cat in score_after:
+        # Exact match first
+        after_val = score_after[target_cat]
+        before_val = score_before.get(target_cat)
+    else:
+        # Fallback: try exact match against all categories
+        for cat, val in score_after.items():
+            if cat == target_cat:
+                after_val = val
+                before_val = score_before.get(cat)
+                target_cat = cat
+                break
 
     if before_val is not None and after_val is not None:
         delta = round(after_val - before_val, 4)
@@ -105,8 +111,8 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             outcome = "regressed"
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: Failed to read rollback data: {e}")
-    elif outcome == "regressed":
-        outcome = "variance_allowed"
+    # Regressions without rollback files are still regressions — do NOT mask them.
+    # The ledger and anti-brute-force mechanism need accurate outcome data.
 
     # ── FIX-05: Write evolution ledger entry ──────────────────────
     # Read proposal info if available
@@ -140,9 +146,13 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
             pass
 
     try:
-        # Import ledger from meta-evolution skill's _internal
-        import importlib
-        ledger_module = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+        # Import ledger using file path (not module path — hyphens in directory names
+        # break importlib.import_module)
+        import importlib.util
+        _ledger_path = os.path.join(boros_dir, "skills", "meta-evolution", "functions", "_internal", "evolution_ledger.py")
+        _spec = importlib.util.spec_from_file_location("evolution_ledger", _ledger_path)
+        ledger_module = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(ledger_module)
         ledger_entry = {
             "cycle": cycle,
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
