@@ -186,7 +186,8 @@ Every category has a **high-water mark** — the best score ever achieved. If a 
 
 ## Boros in Action — Real Evolution Logs
 
-The following is a real run. No edits, no cherry-picking. This is what Boros actually does when you start it.
+The following is a real run. No edits, no cherry-picking. This is what Boros actually does when you start it. 
+just with gemini-2.5-flash, no other models were used, no human intervention
 
 ---
 
