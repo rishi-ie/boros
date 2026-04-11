@@ -1,16 +1,3 @@
 {
-  "entries": [
-    {
-      "event": "fork",
-      "generation": 0,
-      "timestamp": "2026-04-10T09:27:47.973175Z",
-      "cycle_at_fork": 2,
-      "total_cycles_completed": 1,
-      "agent_state": "boros-fork",
-      "high_water_marks": {
-        "memory": 0.459
-      },
-      "adaptation_interval": "2d"
-    }
-  ]
+  "entries": []
 }
