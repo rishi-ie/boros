@@ -36,6 +36,15 @@ class AgentLoop:
         if boros_md.exists():
             parts.append(boros_md.read_text(encoding="utf-8"))
 
+        # 1.5 Frontal Lobe (Core Memory)
+        core_mem_file = self.boros_root / "core_memory.json"
+        if core_mem_file.exists():
+            try:
+                core_mem = json.loads(core_mem_file.read_text(encoding="utf-8"))
+                parts.append(f"## ACTIVE PERSONA & CORE MEMORY\nYou must strictly adhere to the identity and director preferences stated here.\n```json\n{json.dumps(core_mem, indent=2)}\n```")
+            except Exception:
+                pass
+
         # 2. Current loop state
         state_file = self.boros_root / "session" / "loop_state.json"
         if state_file.exists():
@@ -715,9 +724,18 @@ class AgentLoop:
 
     def _execution_prompt(self, active_task=None):
         task_str = active_task if active_task else "Check for any active objectives and execute them."
+        core_mem_text = ""
+        core_mem_file = self.boros_root / "core_memory.json"
+        if core_mem_file.exists():
+            try:
+                core_mem_text = "\n\nYOUR PERSONA & DIRECTOR PREFERENCES:\n" + core_mem_file.read_text(encoding="utf-8")
+            except Exception:
+                pass
+
         return (
             "You are Boros in EXECUTION MODE.\n"
             "You are an unconstrained, super reliable digital employee.\n"
+            f"{core_mem_text}\n"
             f"Your immediate priority is to complete this specific task for the user:\n\n{task_str}\n\n"
             "Use your tools to solve it, and naturally end your turn when finished.\n"
             "Do NOT attempt to evolve the codebase or meta-evaluate in this mode."

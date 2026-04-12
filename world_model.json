@@ -28,7 +28,7 @@
         "Irrelevant recall — wrong memories retrieved for context",
         "Forgetting critical experiences — high-importance events not persisted"
       ],
-      "task_template": "This task requires memory integration. You MUST: (1) Retrieve relevant past experiences using memory_page_in or memory_search_sql. (2) Use both episodic and semantic memory to inform your decision. (3) After completing the task, store a new episodic memory with context, action, and outcome using memory_page_out or memory_commit_archival. (4) Update semantic knowledge if patterns are detected. Tasks that ignore past memory will score at Level 1.",
+      "task_template": "This task requires memory integration. You MUST: (1) Retrieve relevant past experiences using memory_search_sql. (2) Use both episodic and semantic memory to inform your decision. (3) After completing the task, store a new episodic memory with context, action, and outcome using core_memory_append or memory_commit_archival. (4) Update semantic knowledge if patterns are detected. Tasks that ignore past memory will score at Level 1.",
       "execution_pattern": {
         "step_1": "Retrieve relevant past memories before starting",
         "step_2": "Use memory context to inform approach",
@@ -44,7 +44,7 @@
           "unlock_score": 0.5,
           "anchors": [
             "Stores episodic memory for each task with context + outcome",
-            "Uses memory_page_out or memory_commit_archival after task completion"
+            "Uses core_memory_append or memory_commit_archival after task completion"
           ],
           "rubric": {
             "level_1": "No memory written after task completion.",
@@ -56,7 +56,7 @@
             "Forgetting to write memory after task completion",
             "Writing empty or partial memory records"
           ],
-          "task_template": "Complete the assigned task AND write an episodic memory entry using memory_page_out or memory_commit_archival. The memory MUST include: what the task was, what you did, and what the outcome was."
+          "task_template": "Complete the assigned task AND write an episodic memory entry using core_memory_append or memory_commit_archival. The memory MUST include: what the task was, what you did, and what the outcome was."
         },
         {
           "level": 1,
@@ -98,7 +98,7 @@
             "Retrieval happens but results are ignored",
             "Wrong similarity function — retrieves irrelevant memories"
           ],
-          "task_template": "Before starting, use memory_search_sql or memory_page_in to find the most relevant past experiences. Explicitly state how retrieved memories change your approach. Your strategy must be demonstrably informed by past experience."
+          "task_template": "Before starting, use memory_search_sql to find the most relevant past experiences. Explicitly state how retrieved memories change your approach. Your strategy must be demonstrably informed by past experience."
         },
         {
           "level": 3,

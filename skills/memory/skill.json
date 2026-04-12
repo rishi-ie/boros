@@ -1,14 +1,14 @@
 {
   "name": "memory",
   "type": "boot",
-  "description": "To be written.",
+  "description": "Dual-Consciousness Memory Architecture giving Boros a human-employee persona layer via editable Core Memory blocks.",
   "dependencies": [
     "mode-controller",
     "identity"
   ],
   "provided_functions": [
-    "memory_page_in",
-    "memory_page_out",
+    "core_memory_append",
+    "core_memory_replace",
     "memory_search_sql",
     "memory_commit_archival",
     "memory_kg_write",
@@ -19,6 +19,6 @@
     "EVOLVE",
     "EVAL"
   ],
-  "version": "1.0.0",
-  "health_check": "memory_page_in"
+  "version": "2.0.0",
+  "health_check": "memory_kg_query"
 }

@@ -116,7 +116,7 @@ def test_record_gene():
         result = civ_record_gene({
             "cycle": 5,
             "target_skill": "memory",
-            "target_file": "skills/memory/functions/memory_page_in.py",
+            "target_file": "skills/memory/functions/core_memory_append.py",
             "approach": "Improved retrieval logic",
             "diff": "--- a/old\n+++ b/new\n@@ -1 +1 @@\n-old\n+new",
             "score_delta": 0.084,

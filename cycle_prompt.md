@@ -115,7 +115,8 @@ The world model is your north star. Every category in it is a capability you mus
 - `forge_create_skill` — Bring entirely new capabilities into existence.
 - `forge_edit_skill_md` — Reshape how your existing capabilities think and behave.
 - `reason_decompose` / `reason_evaluate_options` — Structure your own thinking.
-- `memory_search_sql` / `memory_page_in` — Search and retrieve past experiences.
+- `memory_search_sql` — Search and retrieve past experiences.
+- `core_memory_append` / `core_memory_replace` — Actively edit your Frontal Lobe (Core Memory) to permanently memorize user preferences, rules, or identity shifts.
 - `memory_kg_write` / `memory_kg_query` — Write and query structured knowledge graph facts. Use this to record causal relationships (e.g., "skill X caused delta in category Y").
 - `evolve_query_ledger` — Query your full evolution history. Use `mode="regressions"` to see what failed, `mode="skill_stats"` for per-skill success rates, `mode="file_history"` to see every change to a specific file.
 

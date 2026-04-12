@@ -98,8 +98,8 @@
         "mode-controller"
       ],
       "provided_functions": [
-        "memory_page_in",
-        "memory_page_out",
+        "core_memory_append",
+        "core_memory_replace",
         "memory_search_sql",
         "memory_commit_archival",
         "memory_kg_write",

@@ -1,5 +1,5 @@
-from .memory_page_in import memory_page_in
-from .memory_page_out import memory_page_out
+from .core_memory_append import core_memory_append
+from .core_memory_replace import core_memory_replace
 from .memory_search_sql import memory_search_sql
 from .memory_commit_archival import memory_commit_archival
 from .memory_kg_write import memory_kg_write
