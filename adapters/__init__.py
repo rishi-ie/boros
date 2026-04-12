@@ -6,7 +6,7 @@ def load_adapter(role_config: dict):
         raise ValueError("No provider specified in role config")
     
     try:
-        module = importlib.import_module(f"boros.adapters.providers.{provider}")
+        module = importlib.import_module(f"adapters.providers.{provider}")
         
         # Capitalize and handle snake_case to CamelCase (e.g., openai_compat -> Openai_compatAdapter -> OpenaiCompatAdapter)
         class_name = "".join(x.capitalize() for x in provider.split("_")) + "Adapter"
