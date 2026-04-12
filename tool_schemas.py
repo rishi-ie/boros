@@ -99,4 +99,13 @@ TOOL_SCHEMAS = {
 
     # ── Eval Utility ──
     "generate_evaluation_artifact": _s("generate_evaluation_artifact", "Generate a JSON artifact file for evaluation in the eval-generator shared artifacts directory.", {"artifact_name": {"type": "string", "description": "Name for the artifact file"}, "content": {"type": "object", "description": "JSON content to write to the artifact"}}, ["artifact_name", "content"]),
+
+    # ── Civilization ──
+    "civ_get_identity": _s("civ_get_identity", "Read this instance's identity (instance_id, parents, generation, birth_type, world_model_hash)."),
+    "civ_record_gene": _s("civ_record_gene", "Record a successful mutation as a gene in the genome. Called automatically by loop_end_cycle on improvement.", {"cycle": {"type": "integer"}, "target_skill": {"type": "string"}, "target_file": {"type": "string"}, "approach": {"type": "string"}, "diff": {"type": "string"}, "score_delta": {"type": "number"}, "score_before": {"type": "object"}, "score_after": {"type": "object"}, "proposal_id": {"type": "string"}, "review_verdict": {"type": "string"}}, ["cycle"]),
+    "civ_read_genome": _s("civ_read_genome", "Read the genome — all genes this instance has accumulated. Supports filtering by origin and category.", {"filter_origin": {"type": "string", "enum": ["evolved", "inherited", "bred"]}, "filter_category": {"type": "string"}, "limit": {"type": "integer"}}),
+    "civ_fork_child": _s("civ_fork_child", "Handle identity + genome + lineage for a fork operation. Generates child ID and prepares identity seed."),
+    "civ_heartbeat": _s("civ_heartbeat", "Write a heartbeat broadcast with current instance state (identity, scores, genes, children).", {"cycle": {"type": "integer"}, "scores": {"type": "object"}, "last_outcome": {"type": "string"}, "last_delta": {"type": "number"}, "last_category": {"type": "string"}}, ["cycle"]),
+    "civ_lineage_read": _s("civ_lineage_read", "Read this instance's lineage record — identity, events, gene count, scores."),
+    "civ_lineage_diff": _s("civ_lineage_diff", "Compare this instance with another Boros instance. Returns shared genes, score comparison, world model divergence.", {"other_path": {"type": "string", "description": "Path to the other Boros instance root"}}, ["other_path"]),
 }

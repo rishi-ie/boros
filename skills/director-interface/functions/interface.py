@@ -539,7 +539,18 @@ class DirectorInterface:
 
         self._start_adapt_scheduler()
 
+        # Delegate to civilization skill for identity + genome + lineage
+        child_id = None
+        if "civ_fork_child" in self.kernel.registry:
+            try:
+                civ_result = self.kernel.registry["civ_fork_child"]({}, self.kernel)
+                child_id = civ_result.get("child_id")
+            except Exception as e:
+                print_formatted_text(HTML(f"<ansiyellow>Civilization fork failed: {escape(str(e))}</ansiyellow>"))
+
         print_formatted_text(HTML(f"<b><ansimagenta>🔱 Forked — Generation {generation}</ansimagenta></b>"))
+        if child_id:
+            print_formatted_text(HTML(f"<ansicyan>Child ID: {escape(child_id)}</ansicyan>"))
         print_formatted_text(HTML(f"<ansigreen>Scores at fork: {escape(json.dumps(high_water))}</ansigreen>"))
         print_formatted_text(HTML(f"<ansiyellow>Adaptation every {interval}  ·  use <b>adapt-config</b> to change</ansiyellow>"))
         print_formatted_text(HTML(

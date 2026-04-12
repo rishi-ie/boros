@@ -58,6 +58,7 @@
   },
   "boot_sequence": [
     "mode-controller",
+    "civilization",
     "memory",
     "skill-router",
     "context-orchestration",
@@ -74,6 +75,20 @@
       "provided_functions": [
         "mode_get",
         "mode_set"
+      ]
+    },
+    "civilization": {
+      "path": "skills/civilization",
+      "type": "boot",
+      "dependencies": ["mode-controller"],
+      "provided_functions": [
+        "civ_get_identity",
+        "civ_record_gene",
+        "civ_read_genome",
+        "civ_fork_child",
+        "civ_heartbeat",
+        "civ_lineage_read",
+        "civ_lineage_diff"
       ]
     },
     "memory": {

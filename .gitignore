@@ -31,3 +31,8 @@ eval-generator/logs/*
 # Exceptions (keep required directories alive in git)
 !eval-generator/shared/.built
 .openclaude-profile.json
+
+# Civilization — ephemeral state (identity.json and genome.jsonl are tracked)
+heartbeat.json
+identity_seed.json
+genome_inherited.jsonl

@@ -222,6 +222,38 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         except Exception as e:
             print(f"[loop_end_cycle] WARNING: milestone check failed: {e}")
 
+    # Record gene if this cycle improved scores
+    if outcome == "improved" and kernel and "civ_record_gene" in kernel.registry:
+        try:
+            # Read diff content from proposal if available
+            proposal_diff = ""
+            proposals_dir_path = os.path.join(boros_dir, "session", "proposals")
+            if os.path.isdir(proposals_dir_path):
+                for fname in os.listdir(proposals_dir_path):
+                    if fname.endswith(".json"):
+                        try:
+                            with open(os.path.join(proposals_dir_path, fname)) as f:
+                                prop_data = json.load(f)
+                            proposal_diff = prop_data.get("diff_content", "")
+                            break
+                        except Exception:
+                            pass
+
+            kernel.registry["civ_record_gene"]({
+                "cycle": cycle,
+                "target_skill": target_skill,
+                "target_file": target_file,
+                "approach": approach,
+                "diff": proposal_diff,
+                "score_delta": delta,
+                "score_before": score_before,
+                "score_after": score_after,
+                "proposal_id": proposal_id,
+                "review_verdict": review_verdict,
+            }, kernel)
+        except Exception as e:
+            print(f"[loop_end_cycle] WARNING: gene recording failed: {e}")
+
     # Clean up session artifacts
     session_dir = os.path.join(boros_dir, "session")
     keep = {"loop_state.json", "current_cycle.json"}
@@ -249,6 +281,19 @@ def loop_end_cycle(params: dict, kernel=None) -> dict:
         rollback_note = " [AUTO-ROLLED-BACK]" if auto_rollback else ""
         f.write(f"Cycle {cycle} ended at {datetime.datetime.utcnow().isoformat()}Z "
                 f"| outcome={outcome} delta={delta}{rollback_note}\n")
+
+    # Broadcast heartbeat
+    if kernel and "civ_heartbeat" in kernel.registry:
+        try:
+            kernel.registry["civ_heartbeat"]({
+                "cycle": cycle,
+                "scores": score_after,
+                "last_outcome": outcome,
+                "last_delta": delta,
+                "last_category": target_cat,
+            }, kernel)
+        except Exception as e:
+            print(f"[loop_end_cycle] WARNING: heartbeat failed: {e}")
 
     return {
         "status": "ok",

@@ -71,6 +71,7 @@ def evolve_propose(params: dict, kernel=None) -> dict:
         "description": params.get("description", ""),
         "target_file": proposal_target_file,
         "diff_summary": params.get("diff_summary", ""),
+        "diff_content": params.get("diff_content", ""),  # Raw diff for gene recording
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "status": "pending_review",
         "hypothesis": hypothesis,  # Always attach hypothesis now

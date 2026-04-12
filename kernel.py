@@ -27,7 +27,27 @@ class BorosKernel:
         self._load_manifest()
         self._validate_world_model()
         self._check_first_boot()
+
+        # Load persisted identity (fallback for when civilization skill isn't loaded yet)
+        identity_file = self.boros_root / "identity.json"
+        if identity_file.exists():
+            try:
+                self.identity = json.loads(identity_file.read_text(encoding="utf-8"))
+            except Exception:
+                self.identity = {}
+        else:
+            self.identity = {}
+
         self._load_skills()
+
+        # Bootstrap civilization identity
+        try:
+            if "civ_get_identity" in self.registry:
+                result = self.registry["civ_get_identity"]({}, self)
+                if result.get("status") == "ok":
+                    self.identity = {k: v for k, v in result.items() if k != "status"}
+        except Exception as e:
+            print(f"[Kernel] WARNING: Identity bootstrap failed: {e}")
 
 
         try:
