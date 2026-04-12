@@ -24,6 +24,7 @@ class DirectorInterface:
         self.verbose      = False
         self._adapt_thread = None
         self._console     = Console()
+        self._agent_loop  = None
 
         # Ensure runtime dirs exist
         self.commands_dir = self.boros_root / "commands"
@@ -175,6 +176,7 @@ class DirectorInterface:
 
         from agent_loop import AgentLoop
         loop = AgentLoop(self.kernel, log_callback=self.log_to_console)
+        self._agent_loop = loop
         try:
             loop.run_continuous(
                 should_pause=lambda: self.pause_requested,
@@ -418,6 +420,9 @@ class DirectorInterface:
             if state.get("agent_state") == "boros-fork" and mode in ("evolution", "employee"):
                 state["agent_state"] = mode
             state_file.write_text(json.dumps(state, indent=2))
+            # Interrupt the running cycle immediately
+            if self._agent_loop is not None:
+                self._agent_loop.interrupt_requested = True
             if mode == "evolution":
                 print_formatted_text(HTML("<b><ansimagenta>Switched to Evolution Mode.</ansimagenta></b>"))
             else:

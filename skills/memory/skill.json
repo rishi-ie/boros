@@ -1,7 +1,7 @@
 {
   "name": "memory",
   "type": "boot",
-  "description": "Dual-Consciousness Memory Architecture giving Boros a human-employee persona layer via editable Core Memory blocks.",
+  "description": "RLM (Retrieval Loop Memory) + DRG (Directed Retrieval Generation) memory architecture. Obsidian-style .md nodes with bidirectional backlinks, section-based indexing, and iterative graph traversal for context-aware retrieval.",
   "dependencies": [
     "mode-controller",
     "identity"
@@ -9,6 +9,8 @@
   "provided_functions": [
     "core_memory_append",
     "core_memory_replace",
+    "memory_store",
+    "memory_retrieve",
     "memory_search_sql",
     "memory_commit_archival",
     "memory_kg_write",
@@ -19,6 +21,6 @@
     "EVOLVE",
     "EVAL"
   ],
-  "version": "2.0.0",
-  "health_check": "memory_kg_query"
+  "version": "3.0.0",
+  "health_check": "memory_retrieve"
 }

@@ -3,37 +3,36 @@ import os
 
 CORE_MEMORY_FILE = "core_memory.json"
 
-def core_memory_replace(args, context):
+def core_memory_replace(params: dict, kernel=None) -> dict:
     """
     Replaces the entire text of a specific block in the Core Memory file.
-    Args:
         block (str): "persona_status" or "director_dossier"
         content (str): The completely new content for the block.
     """
-    block = args.get("block")
-    content = args.get("content")
-    
+    block = params.get("block")
+    content = params.get("content")
+
     if not block or not content:
         return {"status": "error", "message": "Missing 'block' or 'content' in arguments."}
-        
-    workspace_root = context.get("workspace_root", ".")
+
+    workspace_root = str(kernel.boros_root) if kernel else "."
     file_path = os.path.join(workspace_root, CORE_MEMORY_FILE)
-        
+
     if not os.path.exists(file_path):
         return {"status": "error", "message": f"{CORE_MEMORY_FILE} not found at {file_path}."}
-        
+
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            
+
         if block not in data:
             return {"status": "error", "message": f"Block '{block}' not found in core memory."}
-            
+
         data[block] = content
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
-            
+
         return {"status": "ok", "message": f"Successfully replaced {block}."}
     except Exception as e:
         return {"status": "error", "message": str(e)}

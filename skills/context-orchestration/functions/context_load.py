@@ -17,22 +17,40 @@ def context_load(params: dict, kernel=None) -> dict:
             except json.JSONDecodeError as e:
                 print(f"Warning: Could not parse evolution record {record_file}: {e}")
 
-    # Load recent experiences (last 5) — reads individual exp-*.json files written by memory_commit_archival
-    import glob as _glob
-    experiences_dir = os.path.join(boros_dir, "memory", "experiences")
+    # Load recent experiences (last 5) — reads RLM episode nodes from memory/sections/episodes/
     manifest["recent_experiences"] = []
-    if os.path.exists(experiences_dir):
-        exp_files = sorted(
-            _glob.glob(os.path.join(experiences_dir, "exp-*.json")),
-            key=os.path.getmtime,
-            reverse=True
-        )[:5]
-        for ef in exp_files:
-            try:
-                with open(ef) as f:
-                    manifest["recent_experiences"].append(json.load(f))
-            except Exception as e:
-                print(f"Warning: Could not parse experience file {ef}: {e}")
+    episodes_dir = os.path.join(boros_dir, "memory", "sections", "episodes")
+    if os.path.exists(episodes_dir):
+        import sys
+        _skill_root = os.path.join(boros_dir, "skills", "memory")
+        if _skill_root not in sys.path:
+            sys.path.insert(0, _skill_root)
+        try:
+            from _internal.md_parser import parse_memory_md
+            md_files = sorted(
+                [f for f in os.listdir(episodes_dir) if f.endswith(".md")],
+                key=lambda x: os.path.getmtime(os.path.join(episodes_dir, x)),
+                reverse=True
+            )[:5]
+            for fname in md_files:
+                fpath = os.path.join(episodes_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    parsed = parse_memory_md(content)
+                    meta = parsed["meta"]
+                    sections = parsed["sections"]
+                    manifest["recent_experiences"].append({
+                        "id": meta.get("id", fname[:-3]),
+                        "entry_type": meta.get("type", "episode"),
+                        "content": sections.get("Summary", "") or sections.get("Context", ""),
+                        "tags": meta.get("tags", []),
+                        "timestamp": meta.get("created", ""),
+                    })
+                except Exception as e:
+                    print(f"Warning: Could not parse memory node {fname}: {e}")
+        except ImportError:
+            pass
 
     # Load recent scores
     score_file = os.path.join(boros_dir, "memory", "score_history.jsonl")

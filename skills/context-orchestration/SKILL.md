@@ -15,7 +15,7 @@ You consolidate the memory sources Boros needs for the current cycle into one pl
 When `context_load` is called:
 
 1. **Recent evolution records** — last 5 files from `memory/evolution_records/*.json`, sorted by mtime. Includes applied proposals, rejected proposals, and hypothesis outcome archives.
-2. **Recent experiences** — last 5 files from `memory/experiences/exp-*.json`, sorted by mtime. Written by `memory_commit_archival`.
+2. **Recent experiences** — last 5 episode nodes from `memory/sections/episodes/*.md` (RLM), sorted by mtime. Falls back to `memory/experiences/exp-*.json` (legacy) if no .md nodes exist. Written by `memory_store`.
 3. **Recent scores** — last 5 lines from `memory/score_history.jsonl`.
 4. **Active hypothesis** — `session/hypothesis.json` if it exists (cleared at cycle end after archival).
 5. **High-water marks** — `skills/eval-bridge/state/high_water_marks.json`.
@@ -60,7 +60,7 @@ Returns the saved manifest from `session/context_manifest.json` without re-loadi
 
 ## What Is NOT Implemented
 
-- **Associative Whisper / semantic search** — not implemented. Use `memory_search_sql` manually if you need semantic retrieval.
+- **Semantic search** — use `memory_retrieve(query=..., intent=...)` for RLM-powered retrieval across all memory sections.
 - **Identity block, mode/task summary injection** — handled by `agent_loop.py`'s `build_system_prompt()`, not by this skill.
 - **Formatted `=== SECTION ===` string output** — content is returned as a raw dict, not a formatted string.
 
@@ -69,7 +69,7 @@ Returns the saved manifest from `session/context_manifest.json` without re-loadi
 ## Rules
 
 1. **Call `context_load` at the start of REFLECT** — before analyzing scores or writing a hypothesis. This ensures `session/context_manifest.json` is current.
-2. **Experiences are read from `memory/experiences/exp-*.json`** — individual files written by `memory_commit_archival`. Not from `experiences.jsonl` (that file does not exist).
+2. **Experiences are read from `memory/sections/episodes/*.md`** (RLM nodes) with fallback to `memory/experiences/exp-*.json` (legacy JSON). Written by `memory_store`. The `.md` path is preferred; legacy files are migrated by `memory_migrate`.
 3. **Evolution records include hypothesis outcomes** — after Day 1 fixes, `loop_end_cycle` archives each hypothesis to `memory/evolution_records/hyp-cycle{N}.json`. These appear in context so you can see what was tried and what the outcome was.
 
 ---

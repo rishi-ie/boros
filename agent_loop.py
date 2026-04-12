@@ -22,6 +22,7 @@ class AgentLoop:
         self.max_tool_calls = kernel.config.get("max_tool_calls_per_cycle", 100)
         self.max_cycle_minutes = kernel.config.get("max_cycle_duration_minutes", 10)
         self.boros_root = kernel.boros_root
+        self.interrupt_requested = False
 
     # ────────────────────────────────────────────
     # System Prompt Construction
@@ -314,8 +315,8 @@ class AgentLoop:
             "reason_evaluate_options":  lambda p: "Scoring candidate approaches against criteria",
             "reason_check_logic":       lambda p: "Checking the hypothesis for logical gaps",
             "reason_generate_plan":     lambda p: "Generating a step-by-step execution plan",
-            "memory_page_in":           lambda p: f"Loading memory: {p.get('source', 'scores')}",
-            "memory_page_out":          lambda p: "Saving data to memory",
+            "memory_store":             lambda p: f"Storing memory: {_t(p.get('title', p.get('subject', '?')))}",
+            "memory_retrieve":          lambda p: f"Retrieving memories: {_t(p.get('query', p.get('subject', '?')))}",
             "memory_commit_archival":   lambda p: "Recording this cycle's outcome to long-term memory",
             "memory_search_sql":        lambda p: f"Searching memory: {_t(p.get('query', '?'))}",
             "research_search_engine":   lambda p: f"Searching the web for: \"{_t(p.get('query', '?'))}\"",
@@ -385,6 +386,13 @@ class AgentLoop:
                     self.log(f"[CYCLE] Time limit ({self.max_cycle_minutes}m) reached.")
                     status = "timeout"
                     self._ensure_cycle_committed()
+                    break
+
+                # Interrupt check (mode switch)
+                if self.interrupt_requested:
+                    self.log("[CYCLE] Interrupted — mode switch requested.")
+                    status = "interrupted"
+                    self.interrupt_requested = False
                     break
 
                 # Call LLM
@@ -560,6 +568,13 @@ class AgentLoop:
                 if (time.time() - cycle_start) / 60 > self.max_cycle_minutes:
                     self.log(f"[CYCLE] Time limit ({self.max_cycle_minutes}m) reached.")
                     status = "timeout"
+                    break
+
+                # Interrupt check (mode switch)
+                if self.interrupt_requested:
+                    self.log("[CYCLE] Interrupted — mode switch requested.")
+                    status = "interrupted"
+                    self.interrupt_requested = False
                     break
 
                 try:

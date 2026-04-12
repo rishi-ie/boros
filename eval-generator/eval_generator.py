@@ -223,7 +223,7 @@ class EvalGenerator:
         # +0.25: agent made domain-relevant tool calls (not just terminal spam)
         domain_tools = ["research_search_engine", "research_browse", "reason_decompose",
                         "reason_evaluate_options", "reason_check_logic", "reason_generate_plan",
-                        "write_file", "memory_commit_archival"]
+                        "write_file", "memory_store", "memory_commit_archival"]
         used_domain_tool = any(f"Tool {t}" in transcript for t in domain_tools)
         if used_domain_tool:
             outcome_score += 0.25

@@ -73,12 +73,10 @@ Scores are on a 0.0–1.0 scale (normalized from the world model's 4-level rubri
 
 ## Memory Usage
 
-- Use `memory_page_in(source="scores")` to load score history at cycle start.
-- Use `memory_page_in(source="experiences")` to load past lessons.
-- Use `memory_commit_archival` at the end of every cycle to record what worked, what didn't, and why. **Required format:** entry must include `"Context:"`, `"Action:"`, and `"Outcome:"` sections with real detail (minimum 100 characters total). Empty templates are rejected.
-- Use `memory_search_sql` to search for past experiences relevant to your current target.
+- Use `memory_store` to commit any memory node — episodes (what happened), patterns (recurring behaviors), procedures (how-to), causal facts (skill cause-effect), or evolution records. Use `type="episode"` and include `Context:`, `Action:`, `Outcome:` in content for structured entries.
+- Use `memory_retrieve` to search and retrieve past memories using the RLM (Retrieval Loop Memory) engine. Specify `intent=` to guide what types of memory are prioritized (`orient`, `evolve`, `reflect`, `work`). Returns a DRG brief with section-organized context.
+- Use `memory_store(type="causal", subject=..., predicate=..., object=..., cycle=N)` to record causal relationships (e.g., "skill X caused_delta_in category Y"). Replaces the old knowledge graph.
 - Use `evolve_query_ledger` to query your evolution history — every code change, its outcome (improved/regressed/neutral), and the delta. Use `mode="regressions"` to see what failed, `mode="skill_stats"` for per-skill success rates, `mode="file_history"` to see every change to a specific file.
-- Use `memory_kg_write` to record causal relationships (e.g., "skill X caused delta in category Y"). Use `memory_kg_query` to retrieve them. These survive across sessions and build a persistent causal map of what works.
 
 ---
 
