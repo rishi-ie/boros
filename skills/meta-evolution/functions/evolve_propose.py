@@ -5,7 +5,7 @@ from .validate import validate_skill_syntax
 def evolve_propose(params: dict, kernel=None) -> dict:
     """Create a formal evolution proposal. Requires a hypothesis and passes
     the anti-brute-force check before storing the proposal artifact in session."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
 
     # Require a hypothesis before allowing proposals
     hyp_file = os.path.join(boros_dir, "session", "hypothesis.json")

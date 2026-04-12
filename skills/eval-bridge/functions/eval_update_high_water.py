@@ -8,7 +8,7 @@ def eval_update_high_water(params: dict, kernel=None) -> dict:
     peak, not a dampened estimate. The regression checker's adaptive threshold
     already absorbs noise — the mark itself must be accurate.
     """
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     scores = params.get("scores", {})
 
     hw_file = os.path.join(boros_dir, "skills", "eval-bridge", "state", "high_water_marks.json")

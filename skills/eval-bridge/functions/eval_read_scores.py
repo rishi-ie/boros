@@ -30,7 +30,7 @@ def _get_world_model_version(boros_dir: str) -> str:
 
 def eval_read_scores(params: dict, kernel=None) -> dict:
     """Read evaluation scores from the eval-generator results directory."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     eval_id = params.get("eval_id", "")
     results_dir = os.path.join(boros_dir, "eval-generator", "shared", "results")
 

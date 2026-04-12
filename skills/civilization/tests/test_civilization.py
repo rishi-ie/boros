@@ -62,7 +62,7 @@ def test_genesis_identity():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
 
         result = civ_get_identity({}, kernel)
 
@@ -92,7 +92,7 @@ def test_identity_idempotent():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
 
         result1 = civ_get_identity({}, kernel)
         result2 = civ_get_identity({}, kernel)
@@ -107,8 +107,8 @@ def test_record_gene():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_record_gene import civ_record_gene
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_record_gene import civ_record_gene
 
         # Create identity first
         civ_get_identity({}, kernel)
@@ -146,9 +146,9 @@ def test_read_genome():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_record_gene import civ_record_gene
-        from boros.skills.civilization.functions.civ_read_genome import civ_read_genome
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_record_gene import civ_record_gene
+        from skills.civilization.functions.civ_read_genome import civ_read_genome
 
         civ_get_identity({}, kernel)
 
@@ -178,9 +178,9 @@ def test_fork_child():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_record_gene import civ_record_gene
-        from boros.skills.civilization.functions.civ_fork_child import civ_fork_child
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_record_gene import civ_record_gene
+        from skills.civilization.functions.civ_fork_child import civ_fork_child
 
         parent_identity = civ_get_identity({}, kernel)
         civ_record_gene({"cycle": 1, "target_skill": "memory", "score_delta": 0.1}, kernel)
@@ -218,8 +218,8 @@ def test_child_resolves_identity_from_seed():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_fork_child import civ_fork_child
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_fork_child import civ_fork_child
 
         parent_identity = civ_get_identity({}, kernel)
         fork_result = civ_fork_child({}, kernel)
@@ -249,8 +249,8 @@ def test_heartbeat():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_heartbeat import civ_heartbeat
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_heartbeat import civ_heartbeat
 
         civ_get_identity({}, kernel)
 
@@ -279,8 +279,8 @@ def test_lineage_read():
         root = setup_test_instance(tmp)
         kernel = MockKernel(root)
 
-        from boros.skills.civilization.functions.civ_get_identity import civ_get_identity
-        from boros.skills.civilization.functions.civ_lineage import civ_lineage_read
+        from skills.civilization.functions.civ_get_identity import civ_get_identity
+        from skills.civilization.functions.civ_lineage import civ_lineage_read
 
         civ_get_identity({}, kernel)
 

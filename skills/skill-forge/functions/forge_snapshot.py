@@ -2,7 +2,7 @@
 import os, json, shutil, uuid, datetime
 def forge_snapshot(params: dict, kernel=None) -> dict:
     """Create a restorable snapshot of a skill's current function files."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     skill_name_raw = params.get("target", params.get("skill_name", ""))
     if not skill_name_raw:
         return {"status": "error", "message": "target or skill_name required"}

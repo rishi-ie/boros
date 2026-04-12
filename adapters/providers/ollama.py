@@ -1,6 +1,6 @@
 import json
 import urllib.request
-from boros.adapters.base_adapter import BaseAdapter
+from adapters.base_adapter import BaseAdapter
 
 class OllamaAdapter(BaseAdapter):
     """Local Ollama adapter — no API key needed, uses HTTP."""

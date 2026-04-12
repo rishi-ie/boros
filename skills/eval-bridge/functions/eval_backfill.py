@@ -3,7 +3,7 @@ import os, json, glob
 def eval_backfill(params: dict, kernel=None) -> dict:
     """Backfill missing scores into score_history from eval results.
     Writes full entries (eval_id, cycle, timestamp, scores, composite) to preserve format."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     cycle = params.get("cycle", 0)
 
     results_dir = os.path.join(boros_dir, "eval-generator", "shared", "results")

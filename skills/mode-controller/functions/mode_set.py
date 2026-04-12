@@ -1,7 +1,7 @@
 
 import os, json
 def mode_set(params: dict, kernel=None) -> dict:
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     mode = params.get("mode", "evolution")
     state_file = os.path.join(boros_dir, "session", "loop_state.json")
     os.makedirs(os.path.dirname(state_file), exist_ok=True)

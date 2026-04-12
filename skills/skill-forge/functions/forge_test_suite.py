@@ -2,7 +2,7 @@
 import subprocess, os
 def forge_test_suite(params: dict, kernel=None) -> dict:
     """Run the test suite for a skill."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     skill_name = params.get("target", params.get("skill_name", ""))
     if not skill_name:
         return {"status": "error", "message": "skill_name required"}

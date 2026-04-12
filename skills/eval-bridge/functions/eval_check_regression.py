@@ -3,7 +3,7 @@ import os, json, datetime
 
 def eval_check_regression(params: dict, kernel=None) -> dict:
     """Compare current scores against high-water marks. Auto-rollbacks on regression."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     current_scores = params.get("current_scores", {})
 
     # Adaptive threshold: tighten as Boros matures

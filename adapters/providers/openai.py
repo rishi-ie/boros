@@ -1,6 +1,6 @@
 import os
 import json
-from boros.adapters.base_adapter import BaseAdapter
+from adapters.base_adapter import BaseAdapter
 
 class OpenaiAdapter(BaseAdapter):
     def __init__(self, config):

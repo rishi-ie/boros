@@ -152,7 +152,7 @@ class AgentLoop:
 
         # 6. Surface regression warnings
         try:
-            ledger = importlib.import_module("boros.skills.meta-evolution.functions._internal.evolution_ledger")
+            ledger = importlib.import_module("skills.meta-evolution.functions._internal.evolution_ledger")
             
             regressions = ledger.query_ledger(str(self.boros_root), outcome="regressed", limit=10)
             if regressions:
@@ -227,14 +227,14 @@ class AgentLoop:
                 "- OS: Windows. Use `dir` to list directories, `type` to read files.\n"
                 "- Do NOT use `ls` or `cat` — they will fail.\n"
                 "- Use backslashes in terminal paths: `type skills\\memory\\functions\\memory_page_in.py`\n"
-                "- CWD is the boros root. Do NOT prefix paths with `boros/`."
+                f"- CWD is the boros root. Do NOT prefix paths with `{self.boros_root.name}/`."
             )
         else:
             env_note = (
                 "## Environment\n"
                 f"- OS: {os_name}. Use `ls` to list directories, `cat` to read files.\n"
                 "- Use forward slashes in paths: `cat skills/memory/functions/memory_page_in.py`\n"
-                "- CWD is the boros root. Do NOT prefix paths with `boros/`."
+                f"- CWD is the boros root. Do NOT prefix paths with `{self.boros_root.name}/`."
             )
         parts.append(env_note)
 
@@ -246,7 +246,7 @@ class AgentLoop:
 
     def build_tools(self):
         """Build tool list from schemas, filtered to registered functions."""
-        from boros.tool_schemas import TOOL_SCHEMAS
+        from tool_schemas import TOOL_SCHEMAS
         tools = []
         for func_name in self.kernel.registry:
             if func_name in TOOL_SCHEMAS:

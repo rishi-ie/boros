@@ -2,7 +2,7 @@
 import os, json, datetime
 def evolve_modify_loop(params: dict, kernel=None) -> dict:
     """Record a proposed modification to the evolution loop parameters."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     record = {
         "modification": params.get("modification", ""),
         "rationale": params.get("rationale", ""),

@@ -2,7 +2,7 @@
 import os, json
 def reflection_analyze_trace(params: dict, kernel=None) -> dict:
     """Analyze score history to identify trends, weaknesses, and opportunities."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     last_n = params.get("last_n_cycles", 5)
 
     # Read score history

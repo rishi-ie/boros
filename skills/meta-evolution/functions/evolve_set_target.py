@@ -2,7 +2,7 @@
 import os, json, datetime
 def evolve_set_target(params: dict, kernel=None) -> dict:
     """Set the evolution target for this cycle. Writes to session."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     target = {
         "target_skill": params.get("target", params.get("target_skill", "")),
         "category": params.get("category", ""),

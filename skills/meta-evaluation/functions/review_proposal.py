@@ -4,7 +4,7 @@ def review_proposal(params: dict, kernel=None) -> dict:
     """Submit a proposal to the Meta-Evaluation Review Board (secondary LLM).
     If meta_eval_llm is available, calls it for independent review.
     Falls back to rule-based review if no LLM is available."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
 
     proposal_id = params.get("proposal_id", "unknown")
     diff = params.get("diff", "")

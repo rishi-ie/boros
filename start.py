@@ -16,7 +16,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding='utf-8')
 
 ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT.parent))
+sys.path.insert(0, str(ROOT))
 
 
 def main():
@@ -71,7 +71,7 @@ def main():
         _captured = io.StringIO()
         try:
             with contextlib.redirect_stdout(_captured):
-                from boros.kernel import BorosKernel
+                from kernel import BorosKernel
                 kernel = BorosKernel()
         except SystemExit:
             progress.stop()
@@ -137,7 +137,7 @@ def main():
     # ── Hand off to interface ─────────────────────────────────────────────────
     try:
         import importlib
-        iface = importlib.import_module("boros.skills.director-interface.functions.interface")
+        iface = importlib.import_module("skills.director-interface.functions.interface")
         ui = iface.DirectorInterface(kernel)
         ui.run()
     except (KeyboardInterrupt, SystemExit):

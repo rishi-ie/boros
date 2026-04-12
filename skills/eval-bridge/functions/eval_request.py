@@ -2,7 +2,7 @@
 import os, json, uuid, datetime
 def eval_request(params: dict, kernel=None) -> dict:
     """Submit an evaluation request to the Eval Generator sandbox."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     request_id = f"req-{uuid.uuid4().hex[:8]}"
     cycle = params.get("cycle", 0)
     categories = params.get("categories", [])

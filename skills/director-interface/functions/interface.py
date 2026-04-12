@@ -173,7 +173,7 @@ class DirectorInterface:
             ))
             return
 
-        from boros.agent_loop import AgentLoop
+        from agent_loop import AgentLoop
         loop = AgentLoop(self.kernel, log_callback=self.log_to_console)
         try:
             loop.run_continuous(
@@ -663,7 +663,7 @@ class DirectorInterface:
     def _run_adapt_engine(self):
         try:
             sys.path.insert(0, str(self.boros_root.parent))
-            from boros.adapt_engine import AdaptEngine
+            from adapt_engine import AdaptEngine
             result = AdaptEngine(self.kernel, log_callback=self.log_to_console).run()
             if result:
                 print_formatted_text(HTML("<ansigreen>✔ Adaptation complete — changes applied.</ansigreen>"))

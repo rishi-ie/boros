@@ -1,7 +1,7 @@
 
 import os, json, datetime
 def loop_advance_stage(params: dict, kernel=None) -> dict:
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
 
     state_file = os.path.join(boros_dir, "session", "loop_state.json")
     if not os.path.exists(state_file):

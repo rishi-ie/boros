@@ -6,7 +6,7 @@ import importlib
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     from dotenv import load_dotenv
@@ -15,7 +15,7 @@ try:
 except ImportError:
     pass
 
-from boros.adapters import load_adapter
+from adapters import load_adapter
 import subprocess
 
 class BorosKernel:
@@ -257,7 +257,7 @@ class BorosKernel:
         for skill_name in self.manifest["skills"]:
             s_info = self.manifest["skills"][skill_name]
             try:
-                module_path = f"boros.skills.{skill_name}.functions"
+                module_path = f"skills.{skill_name}.functions"
                 module = importlib.import_module(module_path)
                 for func_name in s_info.get("provided_functions", []):
                     if hasattr(module, func_name):
@@ -285,7 +285,7 @@ class BorosKernel:
         if not s_info:
             return False
 
-        module_path = f"boros.skills.{skill_name}.functions"
+        module_path = f"skills.{skill_name}.functions"
 
         for func_name in s_info.get("provided_functions", []):
             sub_path = f"{module_path}.{func_name}"

@@ -7,11 +7,11 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding='utf-8')
 
 boros_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from boros.adapters import load_adapter
-from boros.kernel import BorosKernel
-from boros.tool_schemas import TOOL_SCHEMAS
+from adapters import load_adapter
+from kernel import BorosKernel
+from tool_schemas import TOOL_SCHEMAS
 from tool_dispatcher import ToolDispatcher
 
 # ─────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ class EvalGenerator:
     # ─────────────────────────────────────────────────────────
     def _run_single_task(self, cat_id, workspace_dir, kernel, task_template_injection):
         """Run one task for a category. Returns (score_data, transcript, task)."""
-        from boros.agent_loop import AgentLoop
+        from agent_loop import AgentLoop
 
         # 1. Generate task
         task = self._generate_task(cat_id)

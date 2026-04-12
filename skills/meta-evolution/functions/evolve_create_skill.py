@@ -2,7 +2,7 @@
 import os, json, uuid, datetime
 def evolve_create_skill(params: dict, kernel=None) -> dict:
     """Create a brand new skill with full directory structure."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     skill_name = params.get("skill_name", "")
     description = params.get("description", "")
     functions = params.get("functions", [])
@@ -63,7 +63,7 @@ def evolve_create_skill(params: dict, kernel=None) -> dict:
     if kernel:
         try:
             import importlib
-            module_path = f"boros.skills.{skill_name}.functions"
+            module_path = f"skills.{skill_name}.functions"
             module = importlib.import_module(module_path)
             for func_name in functions:
                 if hasattr(module, func_name):
@@ -93,7 +93,7 @@ def evolve_create_skill(params: dict, kernel=None) -> dict:
                     f.write(new_content)
                 
                 # Active injection into runtime namespace
-                import boros.tool_schemas
+                import tool_schemas
                 import importlib
                 importlib.reload(boros.tool_schemas)
                 for s in schema_objects:

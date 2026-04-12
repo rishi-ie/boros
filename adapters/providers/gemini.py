@@ -4,7 +4,7 @@ import time
 import urllib.request
 import urllib.error
 import uuid
-from boros.adapters.base_adapter import BaseAdapter
+from adapters.base_adapter import BaseAdapter
 
 class GeminiAdapter(BaseAdapter):
     """Google Gemini adapter via REST API."""

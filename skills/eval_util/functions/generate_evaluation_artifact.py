@@ -14,7 +14,7 @@ def generate_evaluation_artifact(params: dict, kernel=None) -> dict:
     """
     content = params.get("content", {})
     artifact_name = params.get("artifact_name", "artifact")
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     artifacts_dir = os.path.join(boros_dir, "eval-generator", "shared", "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
 

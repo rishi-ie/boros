@@ -2,7 +2,7 @@
 import os, json
 def context_load(params: dict, kernel=None) -> dict:
     """Load fresh context at cycle start: identity, scores, hypothesis, recent experiences."""
-    boros_dir = str(kernel.boros_root) if kernel else "boros"
+    boros_dir = str(kernel.boros_root) if kernel else __import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.dirname(__import__("os").path.abspath(__file__)))))
     manifest = {}
 
     # Load recent evolution records (last 5)
