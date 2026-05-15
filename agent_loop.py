@@ -16,13 +16,15 @@ from pathlib import Path
 
 
 class AgentLoop:
-    def __init__(self, kernel, log_callback=None):
+    def __init__(self, kernel, log_callback=None, on_cycle_end=None):
         self.kernel = kernel
         self.log = log_callback or print
+        self.on_cycle_end = on_cycle_end
         self.max_tool_calls = kernel.config.get("max_tool_calls_per_cycle", 100)
         self.max_cycle_minutes = kernel.config.get("max_cycle_duration_minutes", 10)
         self.boros_root = kernel.boros_root
         self.interrupt_requested = False
+        self._pending_goal = None  # goal from TUI
 
     # ────────────────────────────────────────────
     # System Prompt Construction
@@ -356,7 +358,7 @@ class AgentLoop:
     # Single Cycle
     # ────────────────────────────────────────────
 
-    def run_evolution_cycle(self):
+    def run_evolution_cycle(self, goal=None):
         # Sync world model state so live edits to world_model.json are picked up
         try:
             self.kernel._sync_world_model_state(self.boros_root)
@@ -366,7 +368,15 @@ class AgentLoop:
         system = self.build_system_prompt()
         tools = self.build_tools()
 
-        messages = [{"role": "user", "content": self._cycle_prompt()}]
+        # If a goal was queued from the TUI, inject it into the cycle prompt
+        if goal or self._pending_goal:
+            actual_goal = goal or self._pending_goal
+            self._pending_goal = None
+            cycle_prompt = self._cycle_prompt_with_goal(actual_goal)
+        else:
+            cycle_prompt = self._cycle_prompt()
+
+        messages = [{"role": "user", "content": cycle_prompt}]
 
         tool_call_count = 0
         cycle_start = time.time()
@@ -688,11 +698,21 @@ class AgentLoop:
                     pass
 
             try:
+                # Check for TUI-queued goal
+                goal_file = self.boros_root / "session" / "pending_goal.txt"
+                queued_goal = None
+                if goal_file.exists():
+                    try:
+                        queued_goal = goal_file.read_text(encoding="utf-8").strip()
+                        goal_file.unlink()
+                    except Exception:
+                        pass
+
                 if mode == "evolution":
                     self.log(f"\n{'='*60}")
                     self.log(f"  {mode.upper()} CYCLE {cycle_num}")
                     self.log(f"{'='*60}\n")
-                    tc = self.run_evolution_cycle()
+                    tc = self.run_evolution_cycle(goal=queued_goal)
                 else:
                     pending_file = self.boros_root / "commands" / "pending.json"
                     has_tasks = False
@@ -723,6 +743,10 @@ class AgentLoop:
                 if on_cycle_complete:
                     on_cycle_complete(cycle_num, tc)
                 fail_count = 0  # Reset backoff on success
+
+                # Write TUI state after every cycle
+                if self.on_cycle_end:
+                    self.on_cycle_end(cycle_num)
             except Exception as e:
                 self.log(f"[ERROR] Cycle {cycle_num} failed: {e}")
                 self.log(traceback.format_exc())
@@ -754,6 +778,18 @@ class AgentLoop:
             f"Your immediate priority is to complete this specific task for the user:\n\n{task_str}\n\n"
             "Use your tools to solve it, and naturally end your turn when finished.\n"
             "Do NOT attempt to evolve the codebase or meta-evaluate in this mode."
+        )
+
+    def _cycle_prompt_with_goal(self, goal):
+        """Build a cycle prompt that incorporates a specific goal from the TUI."""
+        base = self._cycle_prompt()
+        return (
+            f"{base}\n\n"
+            f"## USER GOAL\n"
+            f"The operator has queued the following goal for this evolution cycle:\n"
+            f"```\n{goal}\n```\n"
+            f"Address this goal with the full REFLECT → EVOLVE → EVAL pipeline.\n"
+            f"Write real code. Persist all state changes. Call loop_end when complete.\n"
         )
 
     def _cycle_prompt(self):

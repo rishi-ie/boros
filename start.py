@@ -1,6 +1,8 @@
 """
 start.py — Launch Boros.
+Simple boot: logo, kernel, hand off to DirectorInterface.
 """
+
 import subprocess
 import sys
 import time
@@ -13,10 +15,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 
-# ══════════════════════════════════════════════════════════════════════════════════════
-# LOGO (single, #EEADA0)
-# ══════════════════════════════════════════════════════════════════════════════════════
-
+# Logo (original Unicode block art, white)
 LOGO = """
 ██████╗  ██████╗ ██████╗  ██████╗ ███████╗
 ██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝
@@ -24,41 +23,24 @@ LOGO = """
 ██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║
 ██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║
 ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
-"""
+""".strip()
 
-
-# ══════════════════════════════════════════════════════════════════════════════════════
-# MAIN
-# ══════════════════════════════════════════════════════════════════════════════════════
 
 def main():
     if sys.stdout.encoding != 'utf-8':
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.align import Align
-    from rich.text import Text
-    
-    console = Console()
-    
-    # ── LOGO ─────────────────────────────────────────────────────────────────────
-    text = Text(LOGO, style="#EEADA0 bold")
-    text.append("\nSelf-Evolving Agent  ·  ARES", style="dim")
-    console.print(Panel(Align.center(text), border_style="#EEADA0", padding=(1, 2)))
-    console.print()
-    
-    # ── BOOT ─────────────────────────────────────────────────────────────────────
+
+    # Print loading
+    print(f"\x1b[97m{LOGO}\x1b[0m")
+    print(f"  \x1b[2mself-evolving agent  ·  ARES\x1b[0m")
+    print(f"  \x1b[2mloading...\x1b[0m")
+    print()
+
     eval_proc = None
     kernel = None
-    
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True) as progress:
-        task = progress.add_task("", start=False)
-        
+
+    try:
         # Launch eval engine
-        progress.update(task, description="Starting eval engine...", completed=10)
         eval_proc = subprocess.Popen(
             [sys.executable, str(ROOT / "eval-generator" / "eval_generator.py")],
             cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -68,55 +50,37 @@ def main():
             if ready_file.exists():
                 break
             time.sleep(1)
-        
+
         # Boot kernel
-        progress.update(task, description="Loading kernel...", completed=40)
-        _captured = io.StringIO()
+        _cap = io.StringIO()
         try:
-            with contextlib.redirect_stdout(_captured):
+            with contextlib.redirect_stdout(_cap):
                 from kernel import BorosKernel
                 kernel = BorosKernel()
         except SystemExit:
-            console.print("\n  [bold red]X  Boot failed — missing API key.[/bold red]")
-            console.print("  Add GEMINI_API_KEY or ANTHROPIC_API_KEY to .env")
+            print(f"\n  \x1b[91mFATAL: Missing API key. Add MINIMAX_API_KEY to .env\x1b[0m\n")
             if eval_proc:
                 eval_proc.terminate()
             return
-        
-        # Check LLM
-        progress.update(task, description="Checking LLM...", completed=70)
+
+        # LLM check
         try:
-            kernel.evolution_llm.complete([{"role": "user", "content": "ping"}], system="Reply 'pong'")
+            kernel.evolution_llm.complete(
+                [{"role": "user", "content": "ping"}],
+                system="Reply 'pong'"
+            )
+            print(f"  \x1b[92mLLM ready\x1b[0m  \x1b[90m·\x1b[0m  \x1b[94m{kernel.config['providers']['evolution_api']['model']}\x1b[0m")
+            print(f"  \x1b[90m{len(kernel.manifest.get('skills', {}))} skills loaded\x1b[0m")
         except Exception as e:
-            console.print(f"\n  [yellow]!  LLM unreachable: {str(e)[:60]}[/yellow]")
-        
-        progress.update(task, description="Ready", completed=100)
-        time.sleep(0.2)
-    
-    # ── STATUS LINE ─────────────────────────────────────────────────────────────
-    provider = kernel.config["providers"]["evolution_api"]["provider"]
-    model = kernel.config["providers"]["evolution_api"]["model"]
-    skill_count = len(kernel.manifest.get("skills", {}))
-    
-    state_file = ROOT / "session" / "loop_state.json"
-    hw_file = ROOT / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
-    
-    mode = "evolution"
-    cycle = 0
-    
-    if state_file.exists():
-        try:
-            state = json.loads(state_file.read_text())
-            cycle = state.get("cycle", 0)
-            mode = state.get("agent_state", state.get("mode", "evolution"))
-        except Exception:
-            pass
-    
-    # Clean status line
-    console.print(f"  [dim]B.O.R.O.S[/dim]  [cyan]{mode}[/cyan]  [dim]|[/dim]  [white]c{cycle}[/white]  [dim]|[/dim]  [white]{provider}[/white]  [dim]|[/dim]  [dim]{skill_count} skills[/dim]")
-    console.print()
-    
-    # ── HAND OFF ────────────────────────────────────────────────────────────────
+            print(f"  \x1b[93mWARNING: {str(e)[:80]}\x1b[0m")
+
+    except Exception as e:
+        print(f"\n  \x1b[91mFATAL: {e}\x1b[0m\n")
+        return
+
+    print()
+
+    # Hand off
     try:
         import importlib
         iface = importlib.import_module("skills.director_interface.functions.interface")
@@ -131,7 +95,7 @@ def main():
                 eval_proc.wait(timeout=5)
             except Exception:
                 pass
-        console.print("\n  [dim]Stopped.[/dim]")
+        print("\n  \x1b[90mstopped.\x1b[0m\n")
 
 
 if __name__ == "__main__":
