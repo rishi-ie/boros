@@ -1,0 +1,13 @@
+{
+  "name": "model-switcher",
+  "version": "1.0.0",
+  "description": "Runtime model/provider switching for Boros evolution",
+  "type": "demand",
+  "dependencies": [],
+  "provided_functions": [
+    "model_switch_get",
+    "model_switch_set",
+    "model_switch_list",
+    "model_switch_update_config"
+  ]
+}

@@ -102,6 +102,12 @@ TOOL_SCHEMAS = {
     # ── Eval Utility ──
     "generate_evaluation_artifact": _s("generate_evaluation_artifact", "Generate a JSON artifact file for evaluation in the eval-generator shared artifacts directory.", {"artifact_name": {"type": "string", "description": "Name for the artifact file"}, "content": {"type": "object", "description": "JSON content to write to the artifact"}}, ["artifact_name", "content"]),
 
+    # ── Model Switcher ──
+    "model_switch_get": _s("model_switch_get", "Get the current active model configuration (evolution_api, meta_eval_api, session overrides)."),
+    "model_switch_set": _s("model_switch_set", "Switch the active model for a target API at runtime. Use minimax for self-evolution.", {"target": {"type": "string", "enum": ["evolution_api", "meta_eval_api", "eval_generator_api"], "description": "Which API to switch"}, "provider": {"type": "string", "enum": ["gemini", "minimax", "anthropic", "openai", "ollama", "openai_compat"]}, "model": {"type": "string", "description": "Model name (e.g., MiniMax-Text-01, gemini-2.5-flash)"}, "persist": {"type": "boolean", "default": True, "description": "Write to config.json for persistence"}}, ["target", "provider", "model"]),
+    "model_switch_list": _s("model_switch_list", "List all available models/providers from config.json."),
+    "model_switch_update_config": _s("model_switch_update_config", "Directly update config.json providers section.", {"providers": {"type": "object", "description": "Full providers object"}}, ["providers"]),
+
     # ── Civilization ──
     "civ_get_identity": _s("civ_get_identity", "Read this instance's identity (instance_id, parents, generation, birth_type, world_model_hash)."),
     "civ_record_gene": _s("civ_record_gene", "Record a successful mutation as a gene in the genome. Called automatically by loop_end_cycle on improvement.", {"cycle": {"type": "integer"}, "target_skill": {"type": "string"}, "target_file": {"type": "string"}, "approach": {"type": "string"}, "diff": {"type": "string"}, "score_delta": {"type": "number"}, "score_before": {"type": "object"}, "score_after": {"type": "object"}, "proposal_id": {"type": "string"}, "review_verdict": {"type": "string"}}, ["cycle"]),

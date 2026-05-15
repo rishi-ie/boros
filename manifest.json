@@ -29,6 +29,11 @@
         "model": "mistral-7b",
         "base_url": "https://api.together.xyz/v1",
         "api_key_env": "TOGETHER_API_KEY"
+      },
+      {
+        "provider": "minimax",
+        "model": "MiniMax-Text-01",
+        "temperature": 1.0
       }
     ],
     "meta_eval": [
@@ -260,6 +265,17 @@
       "dependencies": [],
       "provided_functions": [
         "generate_evaluation_artifact"
+      ]
+    },
+    "model-switcher": {
+      "path": "skills/model-switcher",
+      "type": "demand",
+      "dependencies": [],
+      "provided_functions": [
+        "model_switch_get",
+        "model_switch_set",
+        "model_switch_list",
+        "model_switch_update_config"
       ]
     }
   },

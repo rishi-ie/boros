@@ -29,6 +29,28 @@
       "model": "gemini-2.5-flash"
     }
   },
+  "available_models": [
+    {
+      "name": "gemini-2.5-flash",
+      "provider": "gemini",
+      "description": "Fast and capable, good for evolution"
+    },
+    {
+      "name": "MiniMax-Text-01",
+      "provider": "minimax",
+      "description": "MiniMax's latest model, use for self-evolution"
+    },
+    {
+      "name": "claude-3-5-sonnet",
+      "provider": "anthropic",
+      "description": "Anthropic's Sonnet for meta-evaluation"
+    },
+    {
+      "name": "gpt-4o",
+      "provider": "openai",
+      "description": "OpenAI's GPT-4 for eval generation"
+    }
+  ],
   "fork": {
     "adaptation_interval": "2d",
     "min_tasks_before_adapt": 10,
