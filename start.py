@@ -1,8 +1,5 @@
 """
 start.py — Launch Boros.
-
-Usage:
-    python start.py
 """
 import subprocess
 import sys
@@ -12,129 +9,114 @@ import json
 import contextlib
 from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding='utf-8')
-
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════
+# LOGO (single, #EEADA0)
+# ══════════════════════════════════════════════════════════════════════════════════════
+
+LOGO = """
+██████╗  ██████╗ ██████╗  ██████╗ ███████╗
+██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝
+██████╔╝██║   ██║██████╔╝██║   ██║███████╗
+██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║
+██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║
+╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════════════
+
 def main():
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    
     from rich.console import Console
-    from rich.text import Text
     from rich.panel import Panel
     from rich.align import Align
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-
+    from rich.text import Text
+    
     console = Console()
-
-    # ── Banner ───────────────────────────────────────────────────────────────
-    logo = (
-        "██████╗  ██████╗ ██████╗  ██████╗ ███████╗\n"
-        "██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗██╔════╝\n"
-        "██████╔╝██║   ██║██████╔╝██║   ██║███████╗\n"
-        "██╔══██╗██║   ██║██╔══██╗██║   ██║╚════██║\n"
-        "██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████║\n"
-        "╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝"
-    )
-    text = Text(logo, style="bold cyan")
-    text.append("\n\nSelf-Evolving Agent  ·  ARES", style="dim")
-    console.print(Panel(Align.center(text), border_style="cyan", padding=(1, 2)))
+    
+    # ── LOGO ─────────────────────────────────────────────────────────────────────
+    text = Text(LOGO, style="#EEADA0 bold")
+    text.append("\nSelf-Evolving Agent  ·  ARES", style="dim")
+    console.print(Panel(Align.center(text), border_style="#EEADA0", padding=(1, 2)))
     console.print()
-
-    # ── Boot ─────────────────────────────────────────────────────────────────
+    
+    # ── BOOT ─────────────────────────────────────────────────────────────────────
     eval_proc = None
-    kernel    = None
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Starting eval engine...", total=None)
-
-        # Launch eval-generator — allow logs to be visible to the user
+    kernel = None
+    
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console, transient=True) as progress:
+        task = progress.add_task("", start=False)
+        
+        # Launch eval engine
+        progress.update(task, description="Starting eval engine...", completed=10)
         eval_proc = subprocess.Popen(
             [sys.executable, str(ROOT / "eval-generator" / "eval_generator.py")],
-            cwd=str(ROOT)
+            cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         ready_file = ROOT / "eval-generator" / "shared" / ".ready"
         for _ in range(30):
             if ready_file.exists():
                 break
             time.sleep(1)
-
-        progress.update(task, description="Loading kernel...")
-
-        # Boot kernel — capture its stdout so it doesn't bleed through the spinner
+        
+        # Boot kernel
+        progress.update(task, description="Loading kernel...", completed=40)
         _captured = io.StringIO()
         try:
             with contextlib.redirect_stdout(_captured):
                 from kernel import BorosKernel
                 kernel = BorosKernel()
         except SystemExit:
-            progress.stop()
-            console.print("\n  [bold red]✗  Boot failed — missing or invalid API key.[/bold red]\n")
-            console.print("  Copy [cyan].env.template[/cyan] → [cyan].env[/cyan] and add your key:\n")
-            console.print("      [dim]GEMINI_API_KEY=your_key_here[/dim]")
-            console.print("   or [dim]ANTHROPIC_API_KEY=your_key_here[/dim]\n")
+            console.print("\n  [bold red]X  Boot failed — missing API key.[/bold red]")
+            console.print("  Add GEMINI_API_KEY or ANTHROPIC_API_KEY to .env")
             if eval_proc:
                 eval_proc.terminate()
             return
-
-        progress.update(task, description="Checking connectivity...")
-
-        llm_ok  = True
-        llm_err = ""
+        
+        # Check LLM
+        progress.update(task, description="Checking LLM...", completed=70)
         try:
-            kernel.evolution_llm.complete(
-                [{"role": "user", "content": "ping"}],
-                system="Reply 'pong'"
-            )
+            kernel.evolution_llm.complete([{"role": "user", "content": "ping"}], system="Reply 'pong'")
         except Exception as e:
-            llm_ok  = False
-            llm_err = str(e)[:80]
-
-        progress.update(task, description="Ready.")
+            console.print(f"\n  [yellow]!  LLM unreachable: {str(e)[:60]}[/yellow]")
+        
+        progress.update(task, description="Ready", completed=100)
         time.sleep(0.2)
-
-    # ── Boot summary ─────────────────────────────────────────────────────────
+    
+    # ── STATUS LINE ─────────────────────────────────────────────────────────────
     provider = kernel.config["providers"]["evolution_api"]["provider"]
-    model    = kernel.config["providers"]["evolution_api"]["model"]
-
-    if llm_ok:
-        console.print(f"  [green]✔[/green]  {provider}  ·  {model}")
-    else:
-        console.print(f"  [yellow]⚠[/yellow]  {provider} unreachable — {llm_err}")
-
-    skill_count    = len(kernel.manifest.get("skills", {}))
-    registry_count = len(kernel.registry)
-    console.print(f"  [green]✔[/green]  {registry_count} functions  ·  {skill_count} skills loaded")
-
-    # Show current state if returning
+    model = kernel.config["providers"]["evolution_api"]["model"]
+    skill_count = len(kernel.manifest.get("skills", {}))
+    
     state_file = ROOT / "session" / "loop_state.json"
-    hw_file    = ROOT / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
+    hw_file = ROOT / "skills" / "eval-bridge" / "state" / "high_water_marks.json"
+    
+    mode = "evolution"
+    cycle = 0
+    
     if state_file.exists():
         try:
-            state  = json.loads(state_file.read_text())
-            cycle  = state.get("cycle", 0)
-            mode   = state.get("agent_state", state.get("mode", "evolution"))
-            scores = ""
-            if hw_file.exists():
-                hw    = json.loads(hw_file.read_text())
-                parts = [f"{k} {v:.3f}" for k, v in hw.items() if isinstance(v, (int, float)) and v > 0]
-                if parts:
-                    scores = "  ·  " + "  ".join(parts)
-            console.print(f"  [green]✔[/green]  Cycle {cycle}  ·  {mode}{scores}")
+            state = json.loads(state_file.read_text())
+            cycle = state.get("cycle", 0)
+            mode = state.get("agent_state", state.get("mode", "evolution"))
         except Exception:
             pass
-
+    
+    # Clean status line
+    console.print(f"  [dim]B.O.R.O.S[/dim]  [cyan]{mode}[/cyan]  [dim]|[/dim]  [white]c{cycle}[/white]  [dim]|[/dim]  [white]{provider}[/white]  [dim]|[/dim]  [dim]{skill_count} skills[/dim]")
     console.print()
-    console.print("  [dim]Type[/dim] [bold]help[/bold] [dim]to see commands.[/dim]")
-    console.print()
-
-    # ── Hand off to interface ─────────────────────────────────────────────────
+    
+    # ── HAND OFF ────────────────────────────────────────────────────────────────
     try:
         import importlib
         iface = importlib.import_module("skills.director-interface.functions.interface")
@@ -149,7 +131,7 @@ def main():
                 eval_proc.wait(timeout=5)
             except Exception:
                 pass
-        console.print("\n  Stopped.\n")
+        console.print("\n  [dim]Stopped.[/dim]")
 
 
 if __name__ == "__main__":
