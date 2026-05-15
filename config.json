@@ -20,35 +20,40 @@
   "eval_request_expiry_minutes": 15,
   "providers": {
     "evolution_api": {
-      "provider": "gemini",
-      "model": "gemini-2.5-flash",
+      "provider": "minimax",
+      "model": "MiniMax-M2.7",
       "max_tokens": 8192
     },
     "meta_eval_api": {
-      "provider": "gemini",
-      "model": "gemini-2.5-flash"
+      "provider": "minimax",
+      "model": "MiniMax-M2.7"
     }
   },
   "available_models": [
     {
-      "name": "gemini-2.5-flash",
-      "provider": "gemini",
-      "description": "Fast and capable, good for evolution"
+      "name": "MiniMax-M2.7",
+      "provider": "minimax",
+      "description": "MiniMax's flagship model — Anthropic-compatible, supports thinking"
     },
     {
       "name": "MiniMax-Text-01",
       "provider": "minimax",
-      "description": "MiniMax's latest model, use for self-evolution"
+      "description": "MiniMax's latest text model via REST API"
+    },
+    {
+      "name": "gemini-2.5-flash",
+      "provider": "gemini",
+      "description": "Google Gemini — fallback"
     },
     {
       "name": "claude-3-5-sonnet",
       "provider": "anthropic",
-      "description": "Anthropic's Sonnet for meta-evaluation"
+      "description": "Anthropic Claude — fallback"
     },
     {
       "name": "gpt-4o",
       "provider": "openai",
-      "description": "OpenAI's GPT-4 for eval generation"
+      "description": "OpenAI GPT-4 — fallback"
     }
   ],
   "fork": {

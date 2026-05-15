@@ -1,0 +1,68 @@
+// Boros ↔ Eval Engine communication via gRPC
+syntax = "proto3";
+
+package boros;
+
+service BorosEval {
+  // Submit a self-modification for evaluation
+  rpc SubmitEvaluation(EvalRequest) returns (EvalResponse);
+
+  // Stream results in real-time (no polling)
+  rpc StreamResults(StreamRequest) returns (stream EvalResult);
+
+  // Get current scores
+  rpc GetScores(ScoresRequest) returns (ScoresResponse);
+
+  // Report outcome back to Boros
+  rpc ReportOutcome(OutcomeReport) returns (OutcomeAck);
+}
+
+message EvalRequest {
+  string change_id = 1;
+  string change_type = 2;
+  string target_file = 3;
+  string code_change = 4;
+  map<string, double> capabilities = 5;
+  int64 timestamp = 6;
+}
+
+message EvalResponse {
+  bool accepted = 1;
+  string eval_id = 2;
+  string estimated_duration_ms = 3;
+}
+
+message StreamRequest {
+  string eval_id = 1;
+}
+
+message EvalResult {
+  string eval_id = 1;
+  double overall_score = 2;
+  map<string, double> capability_scores = 3;
+  bool improved = 4;
+  string evidence = 5;
+  repeated string warnings = 6;
+  string status = 7;
+}
+
+message ScoresRequest {}
+
+message ScoresResponse {
+  map<string, double> scores = 1;
+  map<string, double> high_water_marks = 2;
+  int64 timestamp = 3;
+}
+
+message OutcomeReport {
+  string eval_id = 1;
+  string change_id = 2;
+  bool improved = 3;
+  map<string, double> before_scores = 4;
+  map<string, double> after_scores = 5;
+  string evidence = 6;
+}
+
+message OutcomeAck {
+  bool recorded = 1;
+}

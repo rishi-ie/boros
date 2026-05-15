@@ -1,129 +1,273 @@
 {
   "version": "2.0",
+  "meta": {
+    "name": "Digital Employee",
+    "purpose": "Replace human workers on Mac/Windows/Linux with superhuman behavior",
+    "prime_state": "AGI = superhuman across all digital OS control + natural human communication + perfect memory/context management + ability to build new capabilities for itself"
+  },
+
   "categories": {
-    "memory": {
-      "name": "Cognitive Memory System",
-      "description": "Boros maintains a persistent, evolving memory system that mimics human cognition through episodic storage, semantic abstraction, associative recall, and dynamic reinforcement.",
-      "weight": 3.0,
-      "related_skills": [
-        "memory",
-        "reflection"
-      ],
-      "current_milestone": 0,
-      "anchors": [
-        "Stores every meaningful interaction as an episodic memory with context and outcome",
-        "Retrieves relevant past experiences when starting a new task",
-        "Records action + outcome to memory after task completion"
-      ],
-      "rubric": {
-        "level_1": "No memory usage — agent ignores past experiences entirely and treats every task as new.",
-        "level_2": "Agent stores memories but never retrieves them — write-only memory with no recall.",
-        "level_3": "Agent retrieves and applies relevant past memories to inform current decisions.",
-        "level_4": "Agent fully integrates episodic and semantic memory: recalls past experiences, updates beliefs, detects patterns, and explicitly uses memory to improve task performance."
+    "reasoning": {
+      "name": "Reasoning",
+      "description": "Core reasoning: deduction, abduction, causality",
+      "weight": 1.0,
+      "anchors": {
+        "tier_0": "Can follow explicit instructions to reason",
+        "tier_1": "Can perform reasoning tasks independently",
+        "tier_2": "Can teach reasoning strategies to others",
+        "tier_3": "Superhuman on reasoning benchmarks",
+        "tier_4": "Masters any reasoning task instantly"
       },
-      "failure_modes": [
-        "No persistence between tasks — memory is never written",
-        "Memory overload without filtering — irrelevant memories retrieved",
-        "No abstraction — only raw logs, no semantic extraction",
-        "Irrelevant recall — wrong memories retrieved for context",
-        "Forgetting critical experiences — high-importance events not persisted"
-      ],
-      "task_template": "This task requires memory integration. You MUST: (1) Retrieve relevant past experiences using memory_search_sql. (2) Use both episodic and semantic memory to inform your decision. (3) After completing the task, store a new episodic memory with context, action, and outcome using core_memory_append or memory_commit_archival. (4) Update semantic knowledge if patterns are detected. Tasks that ignore past memory will score at Level 1.",
-      "execution_pattern": {
-        "step_1": "Retrieve relevant past memories before starting",
-        "step_2": "Use memory context to inform approach",
-        "step_3": "Execute the task using informed strategy",
-        "step_4": "Store episodic memory: context + action + outcome",
-        "step_5": "Extract and store semantic patterns if recurring"
+      "rubric": "accuracy_on_reasoning_benchmarks",
+      "failure_modes": ["contradiction", "circular_reasoning", "unfounded_assumption"],
+      "related_skills": ["meta-evolution", "reflection"]
+    },
+    "tool_orchestration": {
+      "name": "Tool Orchestration",
+      "description": "Orchestrate multiple tools in parallel/sequence. Chain skills into workflows.",
+      "weight": 1.0,
+      "anchors": {
+        "tier_0": "Can use tools with explicit instructions",
+        "tier_1": "Can orchestrate tools independently",
+        "tier_2": "Can design complex tool workflows",
+        "tier_3": "Superhuman at tool orchestration",
+        "tier_4": "Creates new tools during runtime"
       },
-      "milestones": [
-        {
-          "level": 0,
-          "name": "Event Logging",
-          "difficulty": 3,
-          "unlock_score": 0.5,
-          "anchors": [
-            "Stores episodic memory for each task with context + outcome",
-            "Uses core_memory_append or memory_commit_archival after task completion"
-          ],
-          "rubric": {
-            "level_1": "No memory written after task completion.",
-            "level_2": "Memory written but missing context or outcome fields.",
-            "level_3": "Complete episodic memory stored with context, action, and outcome.",
-            "level_4": "Episodic memory stored with importance scoring and semantic tagging."
-          },
-          "failure_modes": [
-            "Forgetting to write memory after task completion",
-            "Writing empty or partial memory records"
-          ],
-          "task_template": "Complete the assigned task AND write an episodic memory entry using core_memory_append or memory_commit_archival. The memory MUST include: what the task was, what you did, and what the outcome was."
-        },
-        {
-          "level": 1,
-          "name": "Pattern Extraction",
-          "difficulty": 6,
-          "unlock_score": 0.6,
-          "anchors": [
-            "Identifies recurring patterns from episodic memory",
-            "Stores semantic knowledge derived from multiple episodes"
-          ],
-          "rubric": {
-            "level_1": "No pattern recognition — each task treated independently.",
-            "level_2": "Patterns noticed but not stored as semantic knowledge.",
-            "level_3": "Semantic patterns extracted and stored from repeated episodes.",
-            "level_4": "Semantic memory actively used to predict and improve outcomes."
-          },
-          "failure_modes": [
-            "No abstraction from episodic to semantic memory",
-            "Patterns identified but not stored"
-          ],
-          "task_template": "Before starting, search memory for patterns related to this task type using memory_search_sql. After completion, evaluate whether a new semantic pattern should be stored."
-        },
-        {
-          "level": 2,
-          "name": "Associative Recall",
-          "difficulty": 8,
-          "unlock_score": 0.75,
-          "anchors": [
-            "Recalls past events based on similarity to current context",
-            "Uses retrieved memories to inform strategy selection"
-          ],
-          "rubric": {
-            "level_1": "No memory retrieval before starting task.",
-            "level_2": "Memory retrieved but not used to change approach.",
-            "level_3": "Retrieved memories actively shape task strategy.",
-            "level_4": "Multi-hop associative recall: memories trigger related memories, enabling deep contextual reasoning."
-          },
-          "failure_modes": [
-            "Retrieval happens but results are ignored",
-            "Wrong similarity function — retrieves irrelevant memories"
-          ],
-          "task_template": "Before starting, use memory_search_sql to find the most relevant past experiences. Explicitly state how retrieved memories change your approach. Your strategy must be demonstrably informed by past experience."
-        },
-        {
-          "level": 3,
-          "name": "Adaptive Memory Evolution",
-          "difficulty": 10,
-          "unlock_score": 0.9,
-          "anchors": [
-            "Continuously updates beliefs based on new evidence",
-            "Forgets or deprioritizes irrelevant memories",
-            "Prioritizes high-impact memories for recall"
-          ],
-          "rubric": {
-            "level_1": "Memory is static — no updates or pruning.",
-            "level_2": "Some belief updates but no systematic reinforcement.",
-            "level_3": "Systematic reinforcement and decay of memories based on relevance.",
-            "level_4": "Full adaptive memory: reinforcement, decay, compression, and reconstructive recall working together."
-          },
-          "failure_modes": [
-            "Memory grows unbounded without pruning",
-            "Critical memories lost due to lack of reinforcement",
-            "No belief updating when contradicting evidence found"
-          ],
-          "task_template": "Demonstrate adaptive memory: retrieve memories, use them, update their importance scores based on outcome, and identify any memories that should be pruned or merged."
-        }
-      ]
+      "rubric": "workflow_execution_success_rate",
+      "failure_modes": ["tool_conflict", "resource_deadlock", "missing_dependency"],
+      "related_skills": ["skill-forge", "tool-use"]
+    },
+    "autonomous_planning": {
+      "name": "Autonomous Planning",
+      "description": "Plan and execute multi-day goals autonomously without supervision",
+      "weight": 1.5,
+      "anchors": {
+        "tier_0": "Can follow a pre-made plan",
+        "tier_1": "Can create simple plans independently",
+        "tier_2": "Can manage complex multi-step plans",
+        "tier_3": "Superhuman at autonomous planning",
+        "tier_4": "Plans and executes indefinitely without supervision"
+      },
+      "rubric": "cycles_to_complete_10day_project",
+      "failure_modes": ["plan_break", "scope_creep", "goal_drift"],
+      "related_skills": ["meta-evolution", "skill-forge"]
+    },
+    "os_control": {
+      "name": "OS Control",
+      "description": "Full OS control: filesystem, process, network, window management on Mac/Windows/Linux",
+      "weight": 1.5,
+      "anchors": {
+        "tier_0": "Can execute single OS commands",
+        "tier_1": "Can manage files and processes independently",
+        "tier_2": "Can control all OS subsystems",
+        "tier_3": "Superhuman at OS control across all platforms",
+        "tier_4": "Masters any OS task instantly"
+      },
+      "rubric": "task_completion_rate_across_os",
+      "failure_modes": ["permission_error", "platform_incompatibility", "resource_exhaustion"],
+      "related_skills": ["tool-use", "context-orchestration"]
+    },
+    "human_communication": {
+      "name": "Human Communication",
+      "description": "Natural, context-aware human communication: text, voice, visual, email",
+      "weight": 1.5,
+      "anchors": {
+        "tier_0": "Can respond to direct questions",
+        "tier_1": "Can communicate naturally in conversation",
+        "tier_2": "Can manage complex communication threads",
+        "tier_3": "Superhuman at human communication",
+        "tier_4": "Perfect communication in any context"
+      },
+      "rubric": "human_satisfaction_score",
+      "failure_modes": ["misunderstanding", "tone_mismatch", "context_loss"],
+      "related_skills": ["context-orchestration", "reflection"]
+    },
+    "memory_context": {
+      "name": "Memory & Context",
+      "description": "Perfect memory and context management: episodic, semantic, working memory",
+      "weight": 1.5,
+      "anchors": {
+        "tier_0": "Can recall recent context",
+        "tier_1": "Can manage session memory independently",
+        "tier_2": "Can maintain perfect long-term context",
+        "tier_3": "Superhuman at memory and context",
+        "tier_4": "Perfect memory with instant retrieval"
+      },
+      "rubric": "retrieval_accuracy_and_latency",
+      "failure_modes": ["context_confusion", "memory_corruption", "retrieval_failure"],
+      "related_skills": ["memory", "context-orchestration"]
+    },
+    "capability_building": {
+      "name": "Capability Building",
+      "description": "Build new skills during runtime — self-extending without operator intervention",
+      "weight": 2.0,
+      "anchors": {
+        "tier_0": "Can learn from explicit instructions",
+        "tier_1": "Can build simple new capabilities",
+        "tier_2": "Can construct complex new skills",
+        "tier_3": "Superhuman at capability building",
+        "tier_4": "Builds new capabilities continuously during runtime"
+      },
+      "rubric": "new_skills_built_per_hour",
+      "failure_modes": ["skill_corruption", "recursive_self_improvement", "capability_loss"],
+      "related_skills": ["meta-evolution", "skill-forge"]
+    },
+    "meta_learning": {
+      "name": "Meta-Learning",
+      "description": "Learns how to learn — optimizes own learning strategy using past outcomes",
+      "weight": 1.0,
+      "anchors": {
+        "tier_0": "Can follow a learning strategy",
+        "tier_1": "Can learn from experience",
+        "tier_2": "Can optimize own learning approach",
+        "tier_3": "Superhuman at meta-learning",
+        "tier_4": "Instantly optimizes for any new domain"
+      },
+      "rubric": "improvement_velocity",
+      "failure_modes": ["learning_loop", "strategy_corruption", "overfitting"],
+      "related_skills": ["meta-evolution", "meta-evaluation"]
+    },
+    "self_monitoring": {
+      "name": "Self-Monitoring",
+      "description": "Monitor own reasoning, detect loops, calibrate confidence, detect anomalies",
+      "weight": 1.0,
+      "anchors": {
+        "tier_0": "Can recognize obvious reasoning errors",
+        "tier_1": "Can detect reasoning loops",
+        "tier_2": "Can calibrate own confidence accurately",
+        "tier_3": "Superhuman at self-monitoring",
+        "tier_4": "Perfect metacognitive awareness"
+      },
+      "rubric": "anomaly_detection_accuracy",
+      "failure_modes": ["loop_detection_failure", "confidence_miscalibration", "anomaly_blindness"],
+      "related_skills": ["meta-evolution", "reflection"]
+    },
+    "version_control": {
+      "name": "Version Control",
+      "description": "Full git-like history, diff/rollback, bisect regressions, named tags",
+      "weight": 0.5,
+      "anchors": {
+        "tier_0": "Can save snapshots on request",
+        "tier_1": "Can diff and rollback manually",
+        "tier_2": "Can auto-snapshot and bisect",
+        "tier_3": "Superhuman at version control",
+        "tier_4": "Perfect version control with zero data loss"
+      },
+      "rubric": "rollback_success_rate",
+      "failure_modes": ["snapshot_corruption", "bisect_miscalculation", "data_loss"],
+      "related_skills": ["skill-forge", "context-orchestration"]
     }
+  },
+
+  "capability_graph": {
+    "reasoning": {
+      "tier": 1,
+      "description": "Core reasoning capabilities: deduction, abduction, causality",
+      "children": ["deduction", "abduction", "causality"],
+      "emergent_from": ["deduction", "causality"],
+      "prerequisites": [],
+      "metric": "accuracy_on_reasoning_benchmarks",
+      "transfer_priority": "CRITICAL"
+    },
+    "tool_orchestration": {
+      "tier": 2,
+      "description": "Orchestrate multiple tools in parallel/sequence. Chain skills into workflows.",
+      "children": ["skill_chaining", "tool_sequencing", "resource_management"],
+      "prerequisites": ["reasoning"],
+      "metric": "workflow_execution_success_rate",
+      "transfer_priority": "HIGH"
+    },
+    "autonomous_planning": {
+      "tier": 3,
+      "description": "Plan and execute multi-day goals autonomously without supervision",
+      "children": [],
+      "prerequisites": ["reasoning", "tool_orchestration"],
+      "metric": "cycles_to_complete_10day_project",
+      "transfer_priority": "CRITICAL"
+    },
+    "os_control": {
+      "tier": 2,
+      "description": "Full OS control: filesystem, process, network, window management on Mac/Windows/Linux",
+      "children": ["filesystem_operations", "process_management", "network_operations", "window_management"],
+      "prerequisites": ["tool_orchestration"],
+      "metric": "task_completion_rate_across_os",
+      "transfer_priority": "HIGH"
+    },
+    "human_communication": {
+      "tier": 2,
+      "description": "Natural, context-aware human communication: text, voice, visual, email",
+      "children": ["text_communication", "voice_communication", "visual_communication", "email_management"],
+      "prerequisites": ["reasoning"],
+      "metric": "human_satisfaction_score",
+      "transfer_priority": "CRITICAL"
+    },
+    "memory_context": {
+      "tier": 2,
+      "description": "Perfect memory and context management: episodic, semantic, working memory",
+      "children": ["episodic_memory", "semantic_memory", "working_memory", "context_switching"],
+      "prerequisites": ["reasoning"],
+      "metric": "retrieval_accuracy_and_latency",
+      "transfer_priority": "CRITICAL"
+    },
+    "capability_building": {
+      "tier": 4,
+      "description": "Build new skills during runtime — self-extending without operator intervention",
+      "children": [],
+      "prerequisites": ["tool_orchestration", "autonomous_planning"],
+      "metric": "new_skills_built_per_hour",
+      "transfer_priority": "CRITICAL"
+    },
+    "meta_learning": {
+      "tier": 3,
+      "description": "Learns how to learn — optimizes own learning strategy using past outcomes",
+      "children": [],
+      "prerequisites": ["reasoning", "memory_context"],
+      "metric": "improvement_velocity",
+      "transfer_priority": "HIGH"
+    },
+    "self_monitoring": {
+      "tier": 3,
+      "description": "Monitor own reasoning, detect loops, calibrate confidence, detect anomalies",
+      "children": [],
+      "prerequisites": ["reasoning", "meta_learning"],
+      "metric": "anomaly_detection_accuracy",
+      "transfer_priority": "HIGH"
+    },
+    "version_control": {
+      "tier": 2,
+      "description": "Full git-like history, diff/rollback, bisect regressions, named tags",
+      "children": [],
+      "prerequisites": ["tool_orchestration"],
+      "metric": "rollback_success_rate",
+      "transfer_priority": "NORMAL"
+    }
+  },
+
+  "tiers": {
+    "tier_0": "Can use with explicit instructions",
+    "tier_1": "Can perform independently",
+    "tier_2": "Can teach others",
+    "tier_3": "Superhuman on benchmarks",
+    "tier_4": "Masters any task in domain instantly"
+  },
+
+  "dynamic_goals": {
+    "terminal": "AGI = all tier_4 capabilities achieved",
+    "milestones": [
+      {"name": "Narrow Mastery", "criteria": "One domain at tier_4"},
+      {"name": "Broad Competence", "criteria": "10+ domains at tier_3"},
+      {"name": "AGI Prime", "criteria": "All domains at tier_4"}
+    ]
+  },
+
+  "self_modification_bounds": {
+    "can_change": ["skills", "tests", "config", "metacognition_tuning", "world_model.children", "world_model.prerequisites", "world_model.metrics", "agents", "composition", "meta_learning"],
+    "cannot_change": ["world_model.terminal", "world_model.self_modification_bounds", "world_model.tiers", "safety_layer", "version"],
+    "configurable_by": "operator_only"
+  },
+
+  "dynamic_discovery": {
+    "allowed": true,
+    "process": "Boros proposes new capabilities → operator approves → integrated into graph"
   }
 }

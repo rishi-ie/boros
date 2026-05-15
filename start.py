@@ -119,7 +119,7 @@ def main():
     # ── HAND OFF ────────────────────────────────────────────────────────────────
     try:
         import importlib
-        iface = importlib.import_module("skills.director-interface.functions.interface")
+        iface = importlib.import_module("skills.director_interface.functions.interface")
         ui = iface.DirectorInterface(kernel)
         ui.run()
     except (KeyboardInterrupt, SystemExit):

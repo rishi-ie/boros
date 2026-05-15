@@ -1,6 +1,42 @@
 {
-  "memory": {
-    "name": "Cognitive Memory System",
-    "description": "Boros maintains a persistent, evolving memory system that mimics human cognition through episodic storage, semantic abstraction, associative recall, and dynamic reinforcement."
+  "reasoning": {
+    "name": "Reasoning",
+    "description": "Core reasoning: deduction, abduction, causality"
+  },
+  "tool_orchestration": {
+    "name": "Tool Orchestration",
+    "description": "Orchestrate multiple tools in parallel/sequence. Chain skills into workflows."
+  },
+  "autonomous_planning": {
+    "name": "Autonomous Planning",
+    "description": "Plan and execute multi-day goals autonomously without supervision"
+  },
+  "os_control": {
+    "name": "OS Control",
+    "description": "Full OS control: filesystem, process, network, window management on Mac/Windows/Linux"
+  },
+  "human_communication": {
+    "name": "Human Communication",
+    "description": "Natural, context-aware human communication: text, voice, visual, email"
+  },
+  "memory_context": {
+    "name": "Memory & Context",
+    "description": "Perfect memory and context management: episodic, semantic, working memory"
+  },
+  "capability_building": {
+    "name": "Capability Building",
+    "description": "Build new skills during runtime \u00e2\u20ac\u201d self-extending without operator intervention"
+  },
+  "meta_learning": {
+    "name": "Meta-Learning",
+    "description": "Learns how to learn \u00e2\u20ac\u201d optimizes own learning strategy using past outcomes"
+  },
+  "self_monitoring": {
+    "name": "Self-Monitoring",
+    "description": "Monitor own reasoning, detect loops, calibrate confidence, detect anomalies"
+  },
+  "version_control": {
+    "name": "Version Control",
+    "description": "Full git-like history, diff/rollback, bisect regressions, named tags"
   }
 }
