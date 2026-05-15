@@ -5,6 +5,12 @@
       "timestamp": "2026-04-12T06:03:37.055605Z",
       "cycle": 0,
       "birth_type": "genesis"
+    },
+    {
+      "event": "fork",
+      "generation": 0,
+      "timestamp": "2026-05-15T17:28:05.512428Z",
+      "cycle_at_fork": 2
     }
   ],
   "instance_id": "boros-ef72d8d1",

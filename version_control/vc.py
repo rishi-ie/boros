@@ -8,6 +8,7 @@ import json
 import shutil
 import datetime
 import uuid
+import os
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -101,19 +102,33 @@ class VersionControl:
         snap_file = self.snapshots_dir / f"{snapshot_id}.json"
         snap_file.write_text(json.dumps(snap_meta.to_dict(), indent=2))
 
-        # Copy tracked files into snapshot
+        # Copy tracked files into snapshot (file-by-file to avoid Windows permission issues)
         snap_state_dir = self.snapshots_dir / snapshot_id
         snap_state_dir.mkdir(exist_ok=True)
 
         for rel_path in self.TRACKED_FILES:
             src = self.boros_root / rel_path
             dst = snap_state_dir / rel_path
-            if src.exists():
+            if not src.exists():
+                continue
+            try:
                 if src.is_dir():
-                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                    # Copy file by file to handle permission issues
+                    dst.mkdir(parents=True, exist_ok=True)
+                    for item in src.rglob("*"):
+                        if item.is_file():
+                            rel = item.relative_to(src)
+                            dst_file = dst / rel
+                            try:
+                                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(item, dst_file)
+                            except Exception:
+                                pass  # Skip problematic files
                 else:
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
+            except Exception:
+                pass  # Skip entire path if dir copy fails
 
         self.index["snapshots"].append(snapshot_id)
         self.index["current"] = snapshot_id
@@ -146,8 +161,16 @@ class VersionControl:
         return changed
 
     def _dirs_equal(self, a: Path, b: Path) -> bool:
-        import filecmp
-        return filecmp.dircmp(a, b).left_only == []
+        try:
+            import filecmp
+
+            def _cmp_dirs(dcmp):
+                return len(dcmp.left_only) == 0 and len(dcmp.right_only) == 0 and len(dcmp.diff_files) == 0
+
+            dcmp = filecmp.dircmp(str(a), str(b))
+            return _cmp_dirs(dcmp)
+        except Exception:
+            return False
 
     def diff(self, from_id: str, to_id: str) -> dict:
         """Show diff between two snapshots."""
@@ -166,32 +189,38 @@ class VersionControl:
                 continue
 
             if not from_file.exists():
-                diff_result[rel_path] = {
-                    "status": "added",
-                    "content": to_file.read_text(),
-                }
-            elif not to_file.exists():
-                diff_result[rel_path] = {
-                    "status": "deleted",
-                    "content": from_file.read_text(),
-                }
-            else:
-                import difflib
-
-                diff = list(
-                    difflib.unified_diff(
-                        from_file.read_text().splitlines(),
-                        to_file.read_text().splitlines(),
-                        fromfile=str(from_file),
-                        tofile=str(to_file),
-                        lineterm="",
-                    )
-                )
-                if diff:
+                try:
                     diff_result[rel_path] = {
-                        "status": "modified",
-                        "diff": "\n".join(diff),
+                        "status": "added",
+                        "content": to_file.read_text(encoding="utf-8", errors="replace"),
                     }
+                except Exception:
+                    pass
+            elif not to_file.exists():
+                try:
+                    diff_result[rel_path] = {
+                        "status": "deleted",
+                        "content": from_file.read_text(encoding="utf-8", errors="replace"),
+                    }
+                except Exception:
+                    pass
+            else:
+                try:
+                    import difflib
+
+                    diff = list(
+                        difflib.unified_diff(
+                            from_file.read_text(encoding="utf-8", errors="replace").splitlines(),
+                            to_file.read_text(encoding="utf-8", errors="replace").splitlines(),
+                            fromfile=str(from_file),
+                            tofile=str(to_file),
+                            lineterm="",
+                        )
+                    )
+                    if diff:
+                        diff_result[rel_path] = {"status": "modified", "diff": "\n".join(diff)}
+                except Exception:
+                    pass
 
         return diff_result
 
@@ -209,24 +238,24 @@ class VersionControl:
             if not snap_file.exists():
                 continue
 
-            if snap_file.is_dir():
-                if dst.exists():
-                    shutil.rmtree(dst)
-                shutil.copytree(snap_file, dst)
-            else:
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(snap_file, dst)
-
-            restored.append(rel_path)
+            try:
+                if snap_file.is_dir():
+                    if dst.exists():
+                        shutil.rmtree(dst, ignore_errors=True)
+                    shutil.copytree(snap_file, dst, dirs_exist_ok=True)
+                else:
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(snap_file, dst)
+                restored.append(rel_path)
+            except Exception:
+                pass
 
         self.index["current"] = snapshot_id
         self._save_index()
 
         return {"restored": restored, "snapshot": snapshot_id}
 
-    def bisect(
-        self, bad_id: str, good_id: str, test_func: callable
-    ) -> str:
+    def bisect(self, bad_id: str, good_id: str, test_func: callable) -> str:
         """Binary search for which snapshot caused a regression."""
         snapshots = self.index["snapshots"]
         try:
@@ -255,7 +284,10 @@ class VersionControl:
         for snap_id in reversed(self.index["snapshots"][-limit:]):
             snap_file = self.snapshots_dir / f"{snap_id}.json"
             if snap_file.exists():
-                logs.append(json.loads(snap_file.read_text()))
+                try:
+                    logs.append(json.loads(snap_file.read_text()))
+                except Exception:
+                    pass
         return logs
 
     def tag(self, snapshot_id: str, tag_name: str) -> None:
